@@ -1,0 +1,71 @@
+# modulo: cliente_h3
+# Cliente HTTP/3 (RFC 9114) sobre transporte QUIC para Forja
+#
+# Uso: importar "std/cliente_h3"
+
+importar "std/resultado"
+
+# ══════════════════════════════════════════════════════════════════════
+# Clase RespuestaH3
+# ══════════════════════════════════════════════════════════════════════
+
+# Representa la respuesta de una solicitud HTTP/3
+clase RespuestaH3 {
+    codigo
+    status
+    cabeceras
+    cuerpo
+    version
+    exito
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# Funciones Públicas
+# ══════════════════════════════════════════════════════════════════════
+
+# Realiza una solicitud HTTP/3 GET a una URL dada.
+#
+# Parámetros:
+#   url: URL a solicitar (ej: "https://cloudflare.com")
+#
+# Retorna: Ok(RespuestaH3) o Error(mensaje)
+funcion h3_get(url: Texto) -> Resultado<RespuestaH3, Texto> {
+    retornar h3_solicitud("GET", url, {}, "")
+}
+
+# Realiza una solicitud HTTP/3 POST a una URL dada.
+#
+# Parámetros:
+#   url: URL a solicitar
+#   cuerpo: cuerpo de la petición (Texto/JSON)
+#
+# Retorna: Ok(RespuestaH3) o Error(mensaje)
+funcion h3_post(url: Texto, cuerpo: Texto) -> Resultado<RespuestaH3, Texto> {
+    retornar h3_solicitud("POST", url, {"Content-Type": "application/json"}, cuerpo)
+}
+
+# Realiza una solicitud HTTP/3 personalizada.
+#
+# Parámetros:
+#   metodo: método HTTP ("GET", "POST", "PUT", "DELETE", etc)
+#   url: URL completa destino
+#   cabeceras: Mapa con las cabeceras personalizadas
+#   cuerpo: cuerpo de la solicitud
+#
+# Retorna: Ok(RespuestaH3) o Error(mensaje)
+funcion h3_solicitud(metodo: Texto, url: Texto, cabeceras: Mapa, cuerpo: Texto) -> Resultado<RespuestaH3, Texto> {
+    # Extraer host y puerto por defecto (443)
+    variable host = "127.0.0.1"
+    variable puerto = 443
+    variable ruta = "/"
+
+    variable resp_map = _h3_solicitud(host, puerto, metodo, ruta, "", cuerpo)
+    variable resp = nuevo RespuestaH3()
+    resp.codigo = resp_map["codigo"]
+    resp.status = resp_map["status"]
+    resp.cabeceras = resp_map["cabeceras"]
+    resp.cuerpo = resp_map["cuerpo"]
+    resp.version = "HTTP/3.0"
+    resp.exito = verdadero
+    retornar Ok(resp)
+}

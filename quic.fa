@@ -1,0 +1,95 @@
+# modulo: quic
+# Protocolo de Transporte QUIC (RFC 9000) para Forja
+# Transporte seguro multiplexado sobre UDP sin head-of-line blocking
+#
+# Uso: importar "std/quic"
+
+importar "std/resultado"
+
+# ══════════════════════════════════════════════════════════════════════
+# Clases de Dominio
+# ══════════════════════════════════════════════════════════════════════
+
+# Representa un stream bidireccional multiplexado dentro de un túnel QUIC
+clase StreamQUIC {
+    _idx: Entero
+    abierto: Booleano
+
+    constructor(idx: Entero) {
+        este._idx = idx
+        este.abierto = verdadero
+    }
+
+    # Envía datos por este stream QUIC
+    funcion enviar(datos: Texto) -> Resultado<Entero, Texto> {
+        si (no este.abierto) {
+            retornar Error("El stream QUIC está cerrado")
+        }
+        variable bytes = _quic_stream_enviar(este._idx, datos)
+        retornar Ok(bytes)
+    }
+
+    # Recibe datos de este stream QUIC
+    funcion recibir(max_bytes: Entero) -> Resultado<Texto, Texto> {
+        si (no este.abierto) {
+            retornar Error("El stream QUIC está cerrado")
+        }
+        variable datos = _quic_stream_recibir(este._idx, max_bytes)
+        retornar Ok(datos)
+    }
+
+    # Cierra este stream QUIC
+    funcion cerrar() {
+        este.abierto = falso
+    }
+}
+
+# Representa una conexión de transporte QUIC activa
+clase ConexionQUIC {
+    _idx: Entero
+    host: Texto
+    puerto: Entero
+    activa: Booleano
+
+    constructor(idx: Entero, host: Texto, puerto: Entero) {
+        este._idx = idx
+        este.host = host
+        este.puerto = puerto
+        este.activa = verdadero
+    }
+
+    # Abre un nuevo stream bidireccional multiplexado dentro del túnel QUIC
+    funcion abrir_stream() -> Resultado<StreamQUIC, Texto> {
+        si (no este.activa) {
+            retornar Error("La conexión QUIC no está activa")
+        }
+        variable s_idx = _quic_abrir_stream(este._idx)
+        variable st = nuevo StreamQUIC(s_idx)
+        retornar Ok(st)
+    }
+
+    # Cierra la conexión de transporte QUIC de forma segura
+    funcion cerrar() {
+        si (este.activa) {
+            _quic_cerrar(este._idx)
+            este.activa = falso
+        }
+    }
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# Funciones Públicas
+# ══════════════════════════════════════════════════════════════════════
+
+# Establece una conexión QUIC segura sobre UDP con un servidor.
+#
+# Parámetros:
+#   host: IP o nombre de dominio (ej: "ejemplo.com")
+#   puerto: número de puerto (ej: 443)
+#
+# Retorna: Ok(ConexionQUIC) o Error(mensaje)
+funcion quic_conectar(host: Texto, puerto: Entero) -> Resultado<ConexionQUIC, Texto> {
+    variable idx = _quic_conectar(host, puerto)
+    variable conn = nuevo ConexionQUIC(idx, host, puerto)
+    retornar Ok(conn)
+}

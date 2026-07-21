@@ -1,0 +1,181 @@
+# modulo: red
+# Red avanzada (DNS, DoH, DoT, ICMP Ping, Interfaces, MAC) para Forja
+# Proporciona utilidades y resolución de nombres segura y de alto nivel.
+#
+# Uso: importar "std/red"
+
+importar "std/resultado"
+importar "std/texto"
+
+# ══════════════════════════════════════════════════════════════════════
+# Clases de Dominio
+# ══════════════════════════════════════════════════════════════════════
+
+# Representa una interfaz de red del sistema
+clase InterfazRed {
+    nombre: Texto
+    mac: Texto
+    ipv4: Texto
+    ipv6: Texto
+
+    constructor(nombre: Texto, mac: Texto, ipv4: Texto, ipv6: Texto) {
+        este.nombre = nombre
+        este.mac = mac
+        este.ipv4 = ipv4
+        este.ipv6 = ipv6
+    }
+}
+
+# Representa la respuesta de un diagnóstico Ping (ICMP / Socket probe)
+clase RespuestaPing {
+    exito: Booleano
+    host: Texto
+    ip: Texto
+    latencia_ms: Entero
+
+    constructor(exito: Booleano, host: Texto, ip: Texto, latencia_ms: Entero) {
+        este.exito = exito
+        este.host = host
+        este.ip = ip
+        este.latencia_ms = latencia_ms
+    }
+}
+
+# Representa un registro DNS (A, AAAA, etc)
+clase RegistroDNS {
+    tipo: Texto
+    nombre: Texto
+    valor: Texto
+
+    constructor(tipo: Texto, nombre: Texto, valor: Texto) {
+        este.tipo = tipo
+        este.nombre = nombre
+        este.valor = valor
+    }
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# Funciones de Validación de Direcciones
+# ══════════════════════════════════════════════════════════════════════
+
+funcion validar_ipv4(ip: Texto) -> Booleano {
+    si (longitud(ip) == 0) {
+        retornar falso
+    }
+    variable i = 0
+    variable encontrado = falso
+    mientras (i < longitud(ip)) {
+        si (subcadena(ip, i, 1) == ".") {
+            encontrado = verdadero
+        }
+        i = i + 1
+    }
+    retornar encontrado
+}
+
+# Valida si un texto es una dirección IPv6 válida (ej: "::1" o "fe80::1")
+funcion validar_ipv6(ip: Texto) -> Booleano {
+    si (longitud(ip) == 0) {
+        retornar falso
+    }
+    variable i = 0
+    variable encontrado = falso
+    mientras (i < longitud(ip)) {
+        si (subcadena(ip, i, 1) == ":") {
+            encontrado = verdadero
+        }
+        i = i + 1
+    }
+    retornar encontrado
+}
+
+# Valida si un texto es una dirección MAC (ej: "00:1A:2B:3C:4D:5E")
+funcion validar_mac(mac: Texto) -> Booleano {
+    si (longitud(mac) < 11) {
+        retornar falso
+    }
+    variable i = 0
+    variable encontrado = falso
+    mientras (i < longitud(mac)) {
+        variable c = subcadena(mac, i, 1)
+        si (c == ":" || c == "-") {
+            encontrado = verdadero
+        }
+        i = i + 1
+    }
+    retornar encontrado
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# Resolución DNS
+# ══════════════════════════════════════════════════════════════════════
+
+# Resuelve la dirección IP principal de un nombre de host (DNS A/AAAA).
+#
+# Parámetros:
+#   host: nombre de dominio (ej: "google.com")
+#
+# Retorna: Ok(IP como Texto) o Error(mensaje)
+funcion dns_resolver(host: Texto) -> Resultado<Texto, Texto> {
+    variable ips = _net_dns_resolver(host, "A")
+    si (longitud(ips) == 0) {
+        retornar Error("No se pudo resolver la direccion DNS para " + host)
+    }
+    retornar Ok(ips[0])
+}
+
+# Resuelve registros DNS específicos para un dominio (A, AAAA, MX, TXT).
+#
+# Parámetros:
+#   host: nombre de dominio
+#   tipo: tipo de registro ("A", "AAAA", "MX", "TXT")
+#
+# Retorna: Ok(arreglo de IP/valores) o Error(mensaje)
+funcion dns_resolver_tipo(host: Texto, tipo: Texto) -> Resultado<Arreglo<Texto>, Texto> {
+    variable registros = _net_dns_resolver(host, tipo)
+    retornar Ok(registros)
+}
+
+# Resuelve DNS sobre HTTPS (DoH) usando Cloudflare (1.1.1.1) o Google (8.8.8.8).
+#
+# Parámetros:
+#   host: dominio a consultar
+#   servidor_doh: URL del servidor DoH (ej: "https://cloudflare-dns.com/dns-query")
+#
+# Retorna: Ok(arreglo de IPs) o Error(mensaje)
+funcion doh_resolver(host: Texto, servidor_doh: Texto) -> Resultado<Arreglo<Texto>, Texto> {
+    variable ips = _net_doh_query(servidor_doh, host, "A")
+    retornar Ok(ips)
+}
+
+# ══════════════════════════════════════════════════════════════════════
+# Interfaces y Diagnóstico Ping
+# ══════════════════════════════════════════════════════════════════════
+
+# Diagnóstica la conectividad enviando una sonda ICMP / Socket probe a un host.
+#
+# Parámetros:
+#   host: IP o nombre de dominio
+#
+# Retorna: Ok(RespuestaPing)
+funcion ping(host: Texto) -> Resultado<RespuestaPing, Texto> {
+    variable r = _net_ping(host, 2000)
+    variable resp = nuevo RespuestaPing(r.exito, host, r.ip, r.latencia_ms)
+    retornar Ok(resp)
+}
+
+# Lista las interfaces de red activas en el equipo local.
+#
+# Retorna: Ok(Arreglo de InterfazRed)
+funcion interfaces() -> Resultado<Arreglo<InterfazRed>, Texto> {
+    variable lista_raw = _net_interfaces()
+    variable res = []
+    variable i = 0
+    mientras (i < longitud(lista_raw)) {
+        variable item = lista_raw[i]
+        variable inter = nuevo InterfazRed(item.nombre, item.mac, item.ipv4, item.ipv6)
+        res[i] = inter
+        i = i + 1
+    }
+    retornar Ok(res)
+}

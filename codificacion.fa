@@ -58,18 +58,12 @@ funcion hex_codificar(texto: Texto) -> Texto {
 }
 
 # Decodifica un texto hexadecimal a texto plano
+# Implementación nativa Rust (rápida) — reemplaza la versión Forja que iteraba char por char
 # Retorna Error si el texto no es hexadecimal válido
 funcion hex_decodificar(hex: Texto) -> Resultado<Texto, ErrorCodificacion> {
-    variable resultado = ""
-    variable i = 0
-    mientras (i < longitud(hex)) {
-        variable alto = _hex_a_valor(hex[i])
-        variable bajo = _hex_a_valor(hex[i + 1])
-        si (alto < 0 || bajo < 0) {
-            retornar Error(nuevo ErrorCodificacion("Texto hexadecimal inválido", -2))
-        }
-        resultado = resultado + a_caracter(alto * 16 + bajo)
-        i = i + 2
+    variable resultado = _hex_decodificar_nativo(hex)
+    si (resultado == "" && longitud(hex) > 0) {
+        retornar Error(nuevo ErrorCodificacion("Texto hexadecimal inválido", -2))
     }
     retornar Ok(resultado)
 }
