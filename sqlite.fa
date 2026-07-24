@@ -1,0 +1,370 @@
+# módulo: sqlite
+# Descripción: Base de datos SQLite — operaciones SQL completas
+#
+# Uso: importar "std/sqlite"
+#
+# ═════════════════════════════════════════════════════════════════════════
+# Ejemplo rápido:
+# ═════════════════════════════════════════════════════════════════════════
+#
+#   importar "std/sqlite"
+#
+#   funcion main() {
+#       variable db = sqlite.abrir(":memory:")
+#       coincidir (db) {
+#           caso Ok(con) -> {
+#               sqlite.ejecutar(con, "CREATE TABLE usuarios (id INTEGER PRIMARY KEY, nombre TEXT, edad INTEGER)")
+#               sqlite.ejecutar(con, "INSERT INTO usuarios VALUES (1, 'Ana', 30)")
+#               sqlite.ejecutar(con, "INSERT INTO usuarios VALUES (2, 'Luis', 25)")
+#
+#               variable res = sqlite.consultar(con, "SELECT * FROM usuarios")
+#               coincidir (res) {
+#                   caso Ok(filas) -> {
+#                       variable i = 0
+#                       mientras (i < longitud(filas)) {
+#                           imprimir(filas[i]["nombre"] + " tiene " + filas[i]["edad"] + " años")
+#                           i = i + 1
+#                       }
+#                   }
+#                   caso Error(e) -> imprimir("Error: " + e.mensaje)
+#               }
+#
+#               sqlite.cerrar(con)
+#           }
+#           caso Error(e) -> imprimir("Error al abrir BD: " + e.mensaje)
+#       }
+#   }
+#
+# Todas las funciones que pueden fallar retornan Resultado<T, ErrorSQLite>
+# donde ErrorSQLite contiene:
+#   .mensaje — descripción del error
+#   .codigo  — 1=error_apertura, 2=error_ejecucion, 3=error_consulta,
+#              4=error_cerrar, 5=error_argumento, 6=error_transaccion
+
+# ═════════════════════════════════════════════════════════════════════════
+# Clase ErrorSQLite
+# ═════════════════════════════════════════════════════════════════════════
+
+clase ErrorSQLite {
+    mensaje: Texto
+    codigo: Entero
+
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Gestión de Conexiones
+# ═════════════════════════════════════════════════════════════════════════
+
+# Abre una base de datos SQLite.
+#   ruta: ruta al archivo .db, o ":memory:" para base en RAM
+# Retorna Ok(conexion) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   variable db = sqlite.abrir("mi_base.db")
+#   variable db2 = sqlite.abrir(":memory:")   # base temporal en RAM
+funcion abrir(ruta: Texto) {
+    si (longitud(ruta) == 0) {
+        retornar Error(nuevo ErrorSQLite("La ruta no puede estar vacía", 5))
+    }
+
+    variable idx = _sqlite_abrir(ruta)
+    si (idx < 0) {
+        retornar Error(nuevo ErrorSQLite("No se pudo abrir la base de datos: " + ruta, 1))
+    }
+    retornar Ok(idx)
+}
+
+# Cierra una conexión a base de datos.
+# Retorna Ok(nulo) o Error(ErrorSQLite)
+#
+# Nota: Siempre cerrar la conexión al terminar para liberar recursos.
+funcion cerrar(conexion) {
+    variable res = _sqlite_cerrar(conexion)
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al cerrar la conexión", 4))
+    }
+    retornar Ok(nulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Ejecución de SQL
+# ═════════════════════════════════════════════════════════════════════════
+
+# Ejecuta una sentencia SQL que no retorna filas (INSERT, UPDATE, DELETE,
+# CREATE TABLE, DROP TABLE, ALTER, etc.).
+# Retorna Ok(filas_afectadas) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   sqlite.ejecutar(db, "CREATE TABLE test (id INT)")
+#   sqlite.ejecutar(db, "INSERT INTO test VALUES (1)")
+#   sqlite.ejecutar(db, "DELETE FROM test WHERE id = 1")
+funcion ejecutar(conexion, sql: Texto) {
+    si (longitud(sql) == 0) {
+        retornar Error(nuevo ErrorSQLite("La sentencia SQL no puede estar vacía", 5))
+    }
+
+    variable res = _sqlite_ejecutar(conexion, sql)
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al ejecutar SQL", 2))
+    }
+    retornar Ok(res)
+}
+
+# Ejecuta una consulta SQL (SELECT) y retorna un arreglo de mapas.
+# Cada mapa del arreglo representa una fila, con los nombres de columna como claves.
+# Retorna Ok(arreglo) o Error(ErrorSQLite)
+# Si no hay resultados, retorna Ok([]) — un arreglo vacío.
+#
+# Ejemplo:
+#   variable resultado = sqlite.consultar(db, "SELECT * FROM usuarios")
+#   coincidir (resultado) {
+#       caso Ok(filas) -> {
+#           # filas es un arreglo de mapas: [{"id": 1, "nombre": "Ana"}, ...]
+#           imprimir("Hay " + longitud(filas) + " filas")
+#           variable i = 0
+#           mientras (i < longitud(filas)) {
+#               imprimir(filas[i]["nombre"])
+#               i = i + 1
+#           }
+#       }
+#       caso Error(e) -> imprimir("Error: " + e.mensaje)
+#   }
+funcion consultar(conexion, sql: Texto) {
+    si (longitud(sql) == 0) {
+        retornar Error(nuevo ErrorSQLite("La consulta SQL no puede estar vacía", 5))
+    }
+
+    variable res = _sqlite_consultar(conexion, sql)
+    si (tipo(res) == "entero" && res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al ejecutar consulta SQL", 3))
+    }
+    retornar Ok(res)
+}
+
+# Ejecuta una consulta SELECT y retorna solo la primera fila como mapa.
+# Retorna Ok(mapa_si_existe) o Ok(nulo) si no hay resultados, o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   variable usuario = sqlite.consultar_una(db, "SELECT * FROM usuarios WHERE id = 1")
+#   coincidir (usuario) {
+#       caso Ok(u) -> {
+#           si (u != nulo) {
+#               imprimir("Nombre: " + u["nombre"])
+#           } sino {
+#               imprimir("Usuario no encontrado")
+#           }
+#       }
+#       caso Error(e) -> imprimir("Error: " + e.mensaje)
+#   }
+funcion consultar_una(conexion, sql: Texto) {
+    si (longitud(sql) == 0) {
+        retornar Error(nuevo ErrorSQLite("La consulta SQL no puede estar vacía", 5))
+    }
+
+    variable res = _sqlite_consultar(conexion, sql)
+    si (tipo(res) == "entero" && res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al ejecutar consulta SQL", 3))
+    }
+
+    # retornar la primera fila o nulo
+    si (longitud(res) > 0) {
+        retornar Ok(res[0])
+    }
+    retornar Ok(nulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# SQL con Parámetros
+# ═════════════════════════════════════════════════════════════════════════
+
+# Ejecuta SQL con parámetros (usando ? como placeholders).
+# Los valores se pasan como un arreglo en el mismo orden que los ? en el SQL.
+# Esto PREVIENE inyección SQL.
+# Retorna Ok(filas_afectadas) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   sqlite.ejecutar_con_parametros(db, "INSERT INTO usuarios VALUES (?, ?, ?)", [3, "Carlos", 35])
+#   sqlite.ejecutar_con_parametros(db, "UPDATE usuarios SET edad = ? WHERE id = ?", [36, 3])
+funcion ejecutar_con_parametros(conexion, sql: Texto, valores) {
+    si (longitud(sql) == 0) {
+        retornar Error(nuevo ErrorSQLite("La sentencia SQL no puede estar vacía", 5))
+    }
+    si (tipo(valores) != "arreglo") {
+        retornar Error(nuevo ErrorSQLite("Los valores deben ser un arreglo", 5))
+    }
+
+    variable res = _sqlite_ejecutar_params(conexion, sql, valores)
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al ejecutar SQL con parámetros", 2))
+    }
+    retornar Ok(res)
+}
+
+# Ejecuta una consulta SELECT con parámetros (usando ? como placeholders).
+# Los valores se pasan como un arreglo en el mismo orden que los ? en el SQL.
+# PREVIENE inyección SQL.
+# Retorna Ok(arreglo_de_mapas) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   variable res = sqlite.consultar_con_parametros(db, "SELECT * FROM usuarios WHERE edad > ?", [25])
+#   coincidir (res) {
+#       caso Ok(filas) -> {
+#           # filas contiene solo los usuarios con edad > 25
+#       }
+#       caso Error(e) -> imprimir("Error: " + e.mensaje)
+#   }
+funcion consultar_con_parametros(conexion, sql: Texto, valores) {
+    si (longitud(sql) == 0) {
+        retornar Error(nuevo ErrorSQLite("La consulta SQL no puede estar vacía", 5))
+    }
+    si (tipo(valores) != "arreglo") {
+        retornar Error(nuevo ErrorSQLite("Los valores deben ser un arreglo", 5))
+    }
+
+    variable res = _sqlite_consultar_params(conexion, sql, valores)
+    si (tipo(res) == "entero" && res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al ejecutar consulta con parámetros", 3))
+    }
+    retornar Ok(res)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Utilidades
+# ═════════════════════════════════════════════════════════════════════════
+
+# Retorna el último ID de fila insertada (ROWID).
+# Útil después de un INSERT para saber qué ID se generó (especialmente con
+# AUTOINCREMENT o tablas sin INTEGER PRIMARY KEY explícita).
+# Retorna Ok(ultimo_id) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   sqlite.ejecutar(db, "INSERT INTO usuarios (nombre, edad) VALUES ('Sofia', 28)")
+#   variable id = sqlite.ultimo_id(db)
+funcion ultimo_id(conexion) {
+    retornar Ok(_sqlite_ultimo_id(conexion))
+}
+
+# Lista todas las tablas de la base de datos (excluye tablas internas de SQLite).
+# Retorna Ok(arreglo_de_textos) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   variable tabs = sqlite.tablas(db)
+#   coincidir (tabs) {
+#       caso Ok(lista) -> {
+#           variable i = 0
+#           mientras (i < longitud(lista)) {
+#               imprimir("Tabla: " + lista[i])
+#               i = i + 1
+#           }
+#       }
+#       caso Error(e) -> imprimir("Error: " + e.mensaje)
+#   }
+funcion tablas(conexion) {
+    variable res = _sqlite_tablas(conexion)
+    si (tipo(res) == "entero" && res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al listar tablas", 3))
+    }
+    retornar Ok(res)
+}
+
+# Obtiene información detallada de las columnas de una tabla.
+# Retorna Ok(arreglo_de_mapas) donde cada mapa contiene:
+#   cid      — índice de la columna (0-based)
+#   nombre   — nombre de la columna
+#   tipo     — tipo de dato declarado (TEXT, INTEGER, REAL, BLOB, etc.)
+#   not_null — booleano: true si la columna es NOT NULL
+#   default  — valor por defecto (o nulo si no tiene)
+#   pk       — 1 si es clave primaria, 0 si no
+# Retorna Error(ErrorSQLite) si la tabla no existe.
+#
+# Ejemplo:
+#   variable cols = sqlite.columnas(db, "usuarios")
+#   coincidir (cols) {
+#       caso Ok(columnas) -> {
+#           variable i = 0
+#           mientras (i < longitud(columnas)) {
+#               variable c = columnas[i]
+#               imprimir(c["nombre"] + " (" + c["tipo"] + ")" + si(c["pk"] == 1, " PK", ""))
+#               i = i + 1
+#           }
+#       }
+#       caso Error(e) -> imprimir("Error: " + e.mensaje)
+#   }
+funcion columnas(conexion, tabla: Texto) {
+    si (longitud(tabla) == 0) {
+        retornar Error(nuevo ErrorSQLite("El nombre de la tabla no puede estar vacío", 5))
+    }
+
+    variable res = _sqlite_columnas(conexion, tabla)
+    si (tipo(res) == "entero" && res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al obtener columnas de '" + tabla + "'", 3))
+    }
+    retornar Ok(res)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Transacciones
+# ═════════════════════════════════════════════════════════════════════════
+
+# Inicia una transacción.
+# Todas las operaciones posteriores serán atómicas hasta que se llame
+# a confirmar() o deshacer().
+# Retorna Ok(nulo) o Error(ErrorSQLite)
+#
+# Ejemplo:
+#   variable tx = sqlite.transaccion(db)
+#   coincidir (tx) {
+#       caso Ok(_) -> {
+#           sqlite.ejecutar(db, "INSERT INTO usuarios VALUES (10, 'Test', 20)")
+#           sqlite.ejecutar(db, "UPDATE usuarios SET edad = 21 WHERE id = 10")
+#           sqlite.confirmar(db)  # guarda los cambios
+#       }
+#       caso Error(e) -> imprimir("Error en transacción: " + e.mensaje)
+#   }
+funcion transaccion(conexion) {
+    variable res = _sqlite_ejecutar(conexion, "BEGIN TRANSACTION")
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al iniciar transacción", 6))
+    }
+    retornar Ok(nulo)
+}
+
+# Confirma (COMMIT) la transacción actual.
+# Todos los cambios realizados desde transaccion() se guardan permanentemente.
+# Retorna Ok(nulo) o Error(ErrorSQLite)
+funcion confirmar(conexion) {
+    variable res = _sqlite_ejecutar(conexion, "COMMIT")
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al confirmar transacción", 6))
+    }
+    retornar Ok(nulo)
+}
+
+# Revierte (ROLLBACK) la transacción actual.
+# Todos los cambios realizados desde transaccion() se descartan.
+# Retorna Ok(nulo) o Error(ErrorSQLite)
+#
+# Útil para deshacer cambios ante errores:
+#   sqlite.deshacer(db)  # revierte todo lo no confirmado
+funcion deshacer(conexion) {
+    variable res = _sqlite_ejecutar(conexion, "ROLLBACK")
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al deshacer transacción", 6))
+    }
+    retornar Ok(nulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Función helper: ejecutar sin verificar resultado
+# ═════════════════════════════════════════════════════════════════════════
+
+# Ejecuta SQL sin verificar el resultado (ignora errores).
+# Útil para scripts rápidos o prototipos.
+# No se recomienda para código en producción.
+funcion ejecutar_simple(conexion, sql: Texto) {
+    _sqlite_ejecutar(conexion, sql)
+}

@@ -36,6 +36,7 @@ importar "std/texto"
 | [`websocket`](websocket.fa) | WebSocket | `ws_conectar()`, `ws_enviar()`, `ws_recibir()` |
 | [`prueba`](prueba.fa) | Testing | `assert()`, `assert_igual()`, `assert_diferente()`, `assert_verdadero()`, `assert_falso()` |
 | [`aleatorio`](aleatorio.fa) | Aleatoriedad | `aleatorio_entero()`, `aleatorio_decimal()`, `aleatorio_rango()` |
+| [`sqlite`](sqlite.fa) | Base de datos SQLite | `abrir()`, `cerrar()`, `ejecutar()`, `consultar()`, `consultar_una()`, `ejecutar_con_parametros()`, `consultar_con_parametros()`, `ultimo_id()`, `transaccion()`, `confirmar()`, `deshacer()`, `tablas()`, `columnas()` |
 
 ## Ejemplo
 
