@@ -29,7 +29,7 @@ clase RespuestaH3 {
 #   url: URL a solicitar (ej: "https://cloudflare.com")
 #
 # Retorna: Ok(RespuestaH3) o Error(mensaje)
-funcion h3_get(url: Texto) -> Resultado<RespuestaH3, Texto> {
+funcion h3_obtener(url: Texto) -> Resultado<RespuestaH3, Texto> {
     retornar h3_solicitud("GET", url, {}, "")
 }
 
@@ -40,7 +40,7 @@ funcion h3_get(url: Texto) -> Resultado<RespuestaH3, Texto> {
 #   cuerpo: cuerpo de la petición (Texto/JSON)
 #
 # Retorna: Ok(RespuestaH3) o Error(mensaje)
-funcion h3_post(url: Texto, cuerpo: Texto) -> Resultado<RespuestaH3, Texto> {
+funcion h3_enviar(url: Texto, cuerpo: Texto) -> Resultado<RespuestaH3, Texto> {
     retornar h3_solicitud("POST", url, {"Content-Type": "application/json"}, cuerpo)
 }
 

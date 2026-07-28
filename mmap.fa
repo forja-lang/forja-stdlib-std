@@ -1,0 +1,159 @@
+# módulo: mmap
+# Memory-Mapped Files — Mapeo directo de archivos en la memoria virtual del SO
+#
+# Uso: importar "std/mmap"
+#
+# Permite leer/escribir archivos mapeándolos directamente en memoria,
+# ideal para I/O de altísimo rendimiento y archivos grandes (>GB).
+#
+# Funciones:
+#   mmap.abrir(ruta, offset, longitud, modo) -> Resultado<Entero, MmapError>
+#   mmap.leer(handle, offset_local, longitud) -> Resultado<Texto, MmapError>
+#   mmap.escribir(handle, offset_local, datos) -> Resultado<Entero, MmapError>
+#   mmap.sincronizar(handle) -> Resultado<MmapError>
+#   mmap.cerrar(handle) -> Resultado<MmapError>
+#   mmap.tamano_archivo(ruta) -> Resultado<Entero, MmapError>
+#   mmap.tamano_pagina() -> Entero
+#
+# Ejemplo:
+#   variable h = mmap.abrir("datos.bin", 0, 0, "r")
+#   coincidir (h) {
+#       caso Ok(handle) -> {
+#           variable datos = mmap.leer(handle, 0, 100)
+#           mmap.cerrar(handle)
+#       }
+#       caso Error(e) -> escribir("Error: " + e.mensaje)
+#   }
+
+# ═════════════════════════════════════════════════════════════════════════
+# ErrorMmap
+# ═════════════════════════════════════════════════════════════════════════
+
+clase MmapError {
+    mensaje: Texto
+    codigo: Entero
+
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Apertura y cierre
+# ═════════════════════════════════════════════════════════════════════════
+
+# Mapea un archivo en memoria virtual.
+# ruta: ruta al archivo
+# offset: desplazamiento inicial en bytes (se redondea automáticamente)
+# longitud: 0 = mapear todo el archivo desde offset
+# modo: "r" (solo lectura) o "rw" (lectura/escritura)
+# Retorna: Entero (handle opaco para usar en las demás funciones)
+funcion abrir(ruta: Texto, offset: Entero, longitud: Entero, modo: Texto) -> Resultado<Entero, MmapError> {
+    si (longitud(ruta) == 0) {
+        retornar Error(nuevo MmapError("La ruta no puede estar vacía", 1))
+    }
+    si (offset < 0) {
+        retornar Error(nuevo MmapError("El offset no puede ser negativo", 4))
+    }
+    si (longitud < 0) {
+        retornar Error(nuevo MmapError("La longitud no puede ser negativa", 4))
+    }
+    si (modo != "r" && modo != "rw") {
+        retornar Error(nuevo MmapError("Modo debe ser 'r' o 'rw'", 5))
+    }
+
+    variable resultado = _mmap_abrir(ruta, offset, longitud, modo)
+    # _mmap_abrir retorna -1 en error, o el handle en éxito
+    si (resultado == -1) {
+        retornar Error(nuevo MmapError("No se pudo mapear el archivo: " + ruta, 3))
+    }
+    retornar Ok(resultado)
+}
+
+# Cierra un mapping y libera el handle.
+# handle: el handle obtenido de abrir()
+funcion cerrar(handle: Entero) -> Resultado<MmapError> {
+    variable resultado = _mmap_cerrar(handle)
+    si (resultado == -1) {
+        retornar Error(nuevo MmapError("Error al cerrar el mapping", 5))
+    }
+    retornar Ok(nulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Lectura y escritura
+# ═════════════════════════════════════════════════════════════════════════
+
+# Lee bytes de la región mapeada.
+# handle: handle del mapping
+# offset_local: offset dentro de la región mapeada
+# longitud: cantidad de bytes a leer
+funcion leer(handle: Entero, offset_local: Entero, longitud: Entero) -> Resultado<Texto, MmapError> {
+    si (offset_local < 0) {
+        retornar Error(nuevo MmapError("El offset_local no puede ser negativo", 4))
+    }
+    si (longitud <= 0) {
+        retornar Error(nuevo MmapError("La longitud debe ser positiva", 4))
+    }
+
+    variable resultado = _mmap_leer(handle, offset_local, longitud)
+    si (resultado == -1) {
+        retornar Error(nuevo MmapError("Error al leer del mapping", 5))
+    }
+    retornar Ok(resultado)
+}
+
+# Escribe datos en la región mapeada (requiere modo "rw").
+# handle: handle del mapping
+# offset_local: offset dentro de la región mapeada
+# datos: texto a escribir
+funcion escribir(handle: Entero, offset_local: Entero, datos: Texto) -> Resultado<Entero, MmapError> {
+    si (offset_local < 0) {
+        retornar Error(nuevo MmapError("El offset_local no puede ser negativo", 4))
+    }
+    si (longitud(datos) == 0) {
+        retornar Error(nuevo MmapError("No hay datos para escribir", 4))
+    }
+
+    variable resultado = _mmap_escribir(handle, offset_local, datos)
+    si (resultado == -1) {
+        retornar Error(nuevo MmapError("Error al escribir en el mapping", 5))
+    }
+    retornar Ok(resultado)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Sincronización
+# ═════════════════════════════════════════════════════════════════════════
+
+# Fuerza la escritura de los cambios a disco.
+# Necesario después de escribir para asegurar persistencia.
+funcion sincronizar(handle: Entero) -> Resultado<MmapError> {
+    variable resultado = _mmap_sincronizar(handle)
+    si (resultado == -1) {
+        retornar Error(nuevo MmapError("Error al sincronizar el mapping", 5))
+    }
+    retornar Ok(nulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Consultas
+# ═════════════════════════════════════════════════════════════════════════
+
+# Retorna el tamaño del archivo en bytes.
+funcion tamano_archivo(ruta: Texto) -> Resultado<Entero, MmapError> {
+    si (longitud(ruta) == 0) {
+        retornar Error(nuevo MmapError("La ruta no puede estar vacía", 1))
+    }
+    variable resultado = _mmap_tamano(ruta)
+    si (resultado == -1) {
+        retornar Error(nuevo MmapError("No se pudo obtener el tamaño de: " + ruta, 1))
+    }
+    retornar Ok(resultado)
+}
+
+# Retorna el tamaño de página de memoria del sistema (típicamente 4096).
+funcion tamano_pagina() -> Entero {
+    retornar _mmap_page_size()
+}

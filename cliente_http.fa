@@ -233,25 +233,25 @@ funcion _realizar_solicitud(metodo: Texto, url: Texto, cuerpo: Texto, opciones) 
 
 # ─── API Publica ────────────────────────────────────────────────────
 
-funcion get(url: Texto) {
+funcion obtener(url: Texto) {
     variable opciones = nuevo OpcionesCliente()
     retornar _realizar_solicitud("GET", url, "", opciones)
 }
 
-funcion get_con_opciones(url: Texto, opciones) {
+funcion obtener_con_opciones(url: Texto, opciones) {
     retornar _realizar_solicitud("GET", url, "", opciones)
 }
 
-funcion post(url: Texto, cuerpo: Texto) {
+funcion enviar(url: Texto, cuerpo: Texto) {
     variable opciones = nuevo OpcionesCliente()
     retornar _realizar_solicitud("POST", url, cuerpo, opciones)
 }
 
-funcion post_con_opciones(url: Texto, cuerpo: Texto, opciones) {
+funcion enviar_con_opciones(url: Texto, cuerpo: Texto, opciones) {
     retornar _realizar_solicitud("POST", url, cuerpo, opciones)
 }
 
-funcion put(url: Texto, cuerpo: Texto) {
+funcion actualizar(url: Texto, cuerpo: Texto) {
     variable opciones = nuevo OpcionesCliente()
     retornar _realizar_solicitud("PUT", url, cuerpo, opciones)
 }
@@ -261,7 +261,7 @@ funcion eliminar(url: Texto) {
     retornar _realizar_solicitud("DELETE", url, "", opciones)
 }
 
-funcion patch(url: Texto, cuerpo: Texto) {
+funcion modificar_parcial(url: Texto, cuerpo: Texto) {
     variable opciones = nuevo OpcionesCliente()
     retornar _realizar_solicitud("PATCH", url, cuerpo, opciones)
 }

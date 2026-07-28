@@ -1,0 +1,22 @@
+# módulo: toml
+# Parseo y generación de TOML
+# Uso: importar "std/toml"
+
+importar "std/resultado"
+
+clase ErrorToml {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+funcion parsear(texto: Texto) -> Resultado<Mapa<Texto>, ErrorToml> {
+    retornar _toml_parsear(texto);
+}
+
+funcion generar(mapa: Mapa<Texto>) -> Resultado<Texto, ErrorToml> {
+    retornar _toml_generar(mapa);
+}

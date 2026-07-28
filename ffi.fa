@@ -1,0 +1,34 @@
+# módulo: ffi
+# Foreign Function Interface para llamar librerías C
+# Uso: importar "std/ffi"
+
+importar "std/resultado"
+
+clase ErrorFFI {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+funcion cargar_libreria(ruta: Texto) -> Resultado<Entero, ErrorFFI> {
+    retornar _ffi_cargar_libreria(ruta);
+}
+
+funcion obtener_funcion(lib: Entero, nombre: Texto) -> Resultado<Entero, ErrorFFI> {
+    retornar _ffi_obtener_funcion(lib, nombre);
+}
+
+funcion llamar_entero(fn_ptr: Entero, args: Arreglo<Entero>) -> Resultado<Entero, ErrorFFI> {
+    retornar _ffi_llamar_entero(fn_ptr, args);
+}
+
+funcion llamar_texto(fn_ptr: Entero, args: Arreglo<Texto>) -> Resultado<Texto, ErrorFFI> {
+    retornar _ffi_llamar_texto(fn_ptr, args);
+}
+
+funcion liberar(lib: Entero) {
+    _ffi_liberar(lib);
+}

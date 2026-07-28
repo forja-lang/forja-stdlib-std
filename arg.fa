@@ -1,0 +1,99 @@
+# módulo: arg
+# Parser de banderas/argumentos de línea de comandos
+#
+# Uso: importar "std/arg"
+#
+# Proporciona:
+#   arg.parser(nombre_app, descripcion) -> ArgParser
+#   parser.flag_booleano(nombre, descripcion)  # --verbose, -v
+#   parser.flag_texto(nombre, descripcion, por_defecto)  # --output archivo
+#   parser.flag_entero(nombre, descripcion, por_defecto)  # --port 8080
+#   parser.flag_posicional(nombre, descripcion)  # argumento sin --
+#   parser.parsear() -> Resultado<ArgResultado, ErrorArg>
+
+importar "std/resultado"
+
+clase ErrorArg {
+    mensaje: Texto
+    codigo: Entero
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje; este.codigo = codigo
+    }
+}
+
+clase FlagDef {
+    nombre_largo: Texto
+    nombre_corto: Texto
+    descripcion: Texto
+    tipo: Texto       # "booleano", "texto", "entero", "posicional"
+    por_defecto: Texto
+    requerido: Booleano
+    presente: Booleano
+    valor: Texto
+}
+
+clase ArgParser {
+    flags: Arreglo<FlagDef>
+    posicionales: Arreglo<FlagDef>
+    nombre_app: Texto
+    descripcion: Texto
+    args_raw: Arreglo<Texto>
+
+    constructor(nombre_app: Texto, descripcion: Texto) {
+        este.nombre_app = nombre_app
+        este.descripcion = descripcion
+        este.flags = []
+        este.posicionales = []
+        este.args_raw = []
+    }
+}
+
+clase ArgResultado {
+    parser: ArgParser
+
+    constructor(parser: ArgParser) {
+        este.parser = parser
+    }
+
+    funcion presente(self, nombre: Texto) -> Booleano {
+        retornar _arg_flag_presente(self.parser, nombre)
+    }
+
+    funcion texto(self, nombre: Texto) -> Opcion<Texto> {
+        retornar _arg_flag_texto(self.parser, nombre)
+    }
+
+    funcion entero(self, nombre: Texto, por_defecto: Entero) -> Entero {
+        variable val = _arg_flag_texto(self.parser, nombre)
+        coincidir (val) {
+            caso Some(v) -> {
+                variable n = _arg_parsear_entero(v)
+                si (n == "") { retornar por_defecto }
+                retornar n
+            }
+            caso _ -> { retornar por_defecto }
+        }
+    }
+
+    funcion booleano(self, nombre: Texto) -> Booleano {
+        retornar _arg_flag_presente(self.parser, nombre)
+    }
+
+    funcion posicional(self, indice: Entero) -> Opcion<Texto> {
+        retornar _arg_posicional(self.parser, indice)
+    }
+
+    funcion mostrar_ayuda(self) {
+        _arg_mostrar_ayuda(self.parser)
+    }
+}
+
+funcion parser(nombre_app: Texto, descripcion: Texto) -> ArgParser {
+    variable p = nuevo ArgParser(nombre_app, descripcion)
+    p.args_raw = _sistema_argumentos()
+    retornar p
+}
+
+funcion _sistema_argumentos() -> Arreglo<Texto> {
+    retornar _args()
+}

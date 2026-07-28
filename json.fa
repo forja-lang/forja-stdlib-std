@@ -37,7 +37,7 @@ funcion parsear(texto: Texto) {
 }
 
 # Convierte un valor Forja a texto JSON.
-funcion stringificar(valor) {
+funcion serializar(valor) {
     variable res = _json_stringificar(valor)
     si (res[0] != 0) {
         retornar Error(nuevo ErrorJSON(res[1], res[0]))

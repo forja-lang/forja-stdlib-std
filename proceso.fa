@@ -1,0 +1,35 @@
+# módulo: proceso
+# Lanzar subprocesos, tuberías, captura de stdout/stderr
+#
+# Uso: importar "std/proceso"
+#
+# Proporciona:
+#   proceso.ejecutar(comando) -> Resultado<SalidaProceso, ErrorProceso>
+#   proceso.ejecutar_con_stdin(comando, entrada) -> Resultado<SalidaProceso, ErrorProceso>
+#   proceso.ejecutar_en_dir(comando, dir) -> Resultado<SalidaProceso, ErrorProceso>
+#   proceso.esta_ejecutando(pid) -> Booleano
+
+importar "std/resultado"
+
+clase ErrorProceso {
+    mensaje: Texto; codigo: Entero
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje; este.codigo = codigo
+    }
+}
+
+clase SalidaProceso {
+    stdout: Texto; stderr: Texto; codigo_salida: Entero
+}
+
+funcion ejecutar(comando: Texto) -> Resultado<SalidaProceso, ErrorProceso> {
+    retornar _proceso_ejecutar(comando, "", "")
+}
+
+funcion ejecutar_con_stdin(comando: Texto, entrada: Texto) -> Resultado<SalidaProceso, ErrorProceso> {
+    retornar _proceso_ejecutar(comando, entrada, "")
+}
+
+funcion ejecutar_en_dir(comando: Texto, dir: Texto) -> Resultado<SalidaProceso, ErrorProceso> {
+    retornar _proceso_ejecutar(comando, "", dir)
+}

@@ -1,0 +1,38 @@
+# módulo: log
+# Logging estructurado asíncrono
+# Uso: importar "std/log"
+
+importar "std/resultado"
+
+clase ErrorLog {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+funcion configurar(nivel: Texto, archivo: Texto) {
+    _log_configurar(nivel, archivo);
+}
+
+funcion depurar(mensaje: Texto) {
+    _log_escribir("DEBUG", mensaje);
+}
+
+funcion informacion(mensaje: Texto) {
+    _log_escribir("INFO", mensaje);
+}
+
+funcion advertencia(mensaje: Texto) {
+    _log_escribir("ADVERTENCIA", mensaje);
+}
+
+funcion error(mensaje: Texto) {
+    _log_escribir("ERROR", mensaje);
+}
+
+funcion critico(mensaje: Texto) {
+    _log_escribir("CRITICAL", mensaje);
+}

@@ -1,0 +1,20 @@
+# módulo: señales
+# Manejo de señales POSIX y graceful shutdown
+#
+# Uso: importar "std/señales"
+#
+# Proporciona:
+#   señales.manejar_sigint(handler)
+#   señales.manejar_sigterm(handler)
+#   señales.ignorar(senal)
+#   señales.enviar(pid, senal)
+
+clase ErrorSenal {
+    mensaje: Texto; codigo: Entero
+    constructor(m: Texto, c: Entero) { este.mensaje = m; este.codigo = c }
+}
+
+funcion manejar_sigint(handler: Texto) { _senal_manejar("SIGINT", handler) }
+funcion manejar_sigterm(handler: Texto) { _senal_manejar("SIGTERM", handler) }
+funcion ignorar(senal: Texto) { _senal_ignorar(senal) }
+funcion enviar(pid: Entero, senal: Texto) { _senal_enviar(pid, senal) }

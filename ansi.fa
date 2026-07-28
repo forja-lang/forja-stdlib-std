@@ -1,0 +1,137 @@
+# módulo: ansi
+# Secuencias de escape ANSI para terminal: colores, cursor, pantalla
+#
+# Uso: importar "std/ansi"
+#
+# Funciones:
+#   ansi.limpiar_pantalla()    — limpia toda la terminal
+#   ansi.limpiar_linea()       — limpia la línea actual
+#   ansi.mover_cursor(f, c)    — mueve cursor a (fila, columna) 1-based
+#   ansi.color(r, g, b, texto) — texto con color true-color foreground
+#   ansi.rojo(texto), ansi.verde(texto), ... — colores 8/16
+#
+# Constantes:
+#   ansi.ESC, ansi.RESET, ansi.NEGRITA, ansi.DIM, ...
+
+# ═════════════════════════════════════════════════════════════════════════
+# Constantes básicas
+# ═════════════════════════════════════════════════════════════════════════
+
+constante ESC = "\x1b"
+constante RESET = ESC + "[0m"
+constante NEGRITA = ESC + "[1m"
+constante DIM = ESC + "[2m"
+constante ITALICA = ESC + "[3m"
+constante SUBRAYADO = ESC + "[4m"
+constante PARPADEO = ESC + "[5m"
+constante INVERSO = ESC + "[7m"
+constante TACHADO = ESC + "[9m"
+
+# ═════════════════════════════════════════════════════════════════════════
+# Control de pantalla
+# ═════════════════════════════════════════════════════════════════════════
+
+funcion limpiar_pantalla() -> Texto {
+    retornar ESC + "[2J" + ESC + "[H"
+}
+
+funcion limpiar_linea() -> Texto {
+    retornar ESC + "[2K"
+}
+
+funcion limpiar_desde_cursor() -> Texto {
+    retornar ESC + "[J"
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Movimiento de cursor
+# ═════════════════════════════════════════════════════════════════════════
+
+funcion mover_cursor(fila: Entero, columna: Entero) -> Texto {
+    retornar ESC + "[" + a_texto(fila) + ";" + a_texto(columna) + "H"
+}
+
+funcion guardar_cursor() -> Texto {
+    retornar ESC + "[s"
+}
+
+funcion restaurar_cursor() -> Texto {
+    retornar ESC + "[u"
+}
+
+funcion mostrar_cursor(visible: Booleano) -> Texto {
+    si (visible) {
+        retornar ESC + "[?25h"
+    }
+    retornar ESC + "[?25l"
+}
+
+funcion subir(n: Entero) -> Texto {
+    retornar ESC + "[" + a_texto(n) + "A"
+}
+
+funcion bajar(n: Entero) -> Texto {
+    retornar ESC + "[" + a_texto(n) + "B"
+}
+
+funcion adelante(n: Entero) -> Texto {
+    retornar ESC + "[" + a_texto(n) + "C"
+}
+
+funcion atras(n: Entero) -> Texto {
+    retornar ESC + "[" + a_texto(n) + "D"
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Colores 8/16 (texto)
+# ═════════════════════════════════════════════════════════════════════════
+
+funcion _con_color(codigo: Texto, texto: Texto) -> Texto {
+    retornar ESC + "[" + codigo + "m" + texto + RESET
+}
+
+funcion negro(texto: Texto) -> Texto { retornar _con_color("30", texto) }
+funcion rojo(texto: Texto) -> Texto { retornar _con_color("31", texto) }
+funcion verde(texto: Texto) -> Texto { retornar _con_color("32", texto) }
+funcion amarillo(texto: Texto) -> Texto { retornar _con_color("33", texto) }
+funcion azul(texto: Texto) -> Texto { retornar _con_color("34", texto) }
+funcion magenta(texto: Texto) -> Texto { retornar _con_color("35", texto) }
+funcion cyan(texto: Texto) -> Texto { retornar _con_color("36", texto) }
+funcion blanco(texto: Texto) -> Texto { retornar _con_color("37", texto) }
+
+funcion negro_fondo(texto: Texto) -> Texto { retornar _con_color("40", texto) }
+funcion rojo_fondo(texto: Texto) -> Texto { retornar _con_color("41", texto) }
+funcion verde_fondo(texto: Texto) -> Texto { retornar _con_color("42", texto) }
+funcion amarillo_fondo(texto: Texto) -> Texto { retornar _con_color("43", texto) }
+funcion azul_fondo(texto: Texto) -> Texto { retornar _con_color("44", texto) }
+funcion magenta_fondo(texto: Texto) -> Texto { retornar _con_color("45", texto) }
+funcion cyan_fondo(texto: Texto) -> Texto { retornar _con_color("46", texto) }
+funcion blanco_fondo(texto: Texto) -> Texto { retornar _con_color("47", texto) }
+
+# ═════════════════════════════════════════════════════════════════════════
+# True Color (24-bit)
+# ═════════════════════════════════════════════════════════════════════════
+
+funcion color(r: Entero, g: Entero, b: Entero, texto: Texto) -> Texto {
+    retornar ESC + "[38;2;" + a_texto(r) + ";" + a_texto(g) + ";" + a_texto(b) + "m" + texto + RESET
+}
+
+funcion color_fondo(r: Entero, g: Entero, b: Entero, texto: Texto) -> Texto {
+    retornar ESC + "[48;2;" + a_texto(r) + ";" + a_texto(g) + ";" + a_texto(b) + "m" + texto + RESET
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Título de la terminal
+# ═════════════════════════════════════════════════════════════════════════
+
+funcion titulo(texto: Texto) -> Texto {
+    retornar ESC + "]0;" + texto + "\x07"
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Sonido
+# ═════════════════════════════════════════════════════════════════════════
+
+funcion beep() -> Texto {
+    retornar "\x07"
+}

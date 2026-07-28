@@ -1,0 +1,21 @@
+# módulo: atomicos
+# Primitivas atómicas lock-free para concurrencia
+#
+# Uso: importar "std/atomicos"
+
+importar "std/resultado"
+
+clase ErrorAtomico {
+    mensaje: Texto; codigo: Entero
+    constructor(m: Texto, c: Entero) { este.mensaje = m; este.codigo = c }
+}
+
+funcion entero_nuevo(valor_inicial: Entero) -> Entero { retornar _atomico_entero_nuevo() }
+funcion entero_cargar(ptr: Entero) -> Entero { retornar _atomico_cargar(ptr) }
+funcion entero_almacenar(ptr: Entero, valor: Entero) { _atomico_almacenar(ptr, valor) }
+funcion entero_sumar(ptr: Entero, delta: Entero) -> Entero { retornar _atomico_sumar(ptr, delta) }
+funcion entero_intercambiar(ptr: Entero, valor: Entero) -> Entero { retornar _atomico_intercambiar(ptr, valor) }
+funcion entero_comparar_intercambiar(ptr: Entero, esperado: Entero, nuevo: Entero) -> Booleano { retornar _atomico_cas(ptr, esperado, nuevo) }
+funcion booleano_nuevo(valor_inicial: Booleano) -> Entero { retornar _atomico_booleano_nuevo() }
+funcion booleano_cargar(ptr: Entero) -> Booleano { retornar _atomico_booleano_cargar(ptr) }
+funcion booleano_almacenar(ptr: Entero, valor: Booleano) { _atomico_booleano_almacenar(ptr, valor) }

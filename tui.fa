@@ -1,0 +1,73 @@
+# módulo: tui
+# Terminal UI interactiva: raw mode, tamaño terminal, lectura de teclas
+#
+# Uso: importar "std/tui"
+#
+# Funciones:
+#   tui.raw_mode(activar)           — activa/desactiva modo raw
+#   tui.leer_tecla()                — lee una tecla (raw mode requerido)
+#   tui.tamano_terminal()           — retorna (columnas, filas)
+
+# ═════════════════════════════════════════════════════════════════════════
+# ErrorTui
+# ═════════════════════════════════════════════════════════════════════════
+
+clase ErrorTui {
+    mensaje: Texto
+    codigo: Entero
+
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Modo raw
+# ═════════════════════════════════════════════════════════════════════════
+
+# Activa o desactiva el modo raw de la terminal.
+# En modo raw, las teclas se leen inmediatamente sin esperar Enter.
+# activar: verdadero para activar, falso para restaurar modo normal
+funcion raw_mode(activar: Booleano) -> Resultado<ErrorTui> {
+    variable resultado = _terminal_raw(activar)
+    si (resultado == -1) {
+        retornar Error(nuevo ErrorTui("Error al cambiar modo terminal", 1))
+    }
+    retornar Ok(nulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Lectura de teclas
+# ═════════════════════════════════════════════════════════════════════════
+
+# Lee una tecla de la terminal (requiere modo raw activado).
+# Retorna el caracter o la secuencia de escape.
+funcion leer_tecla() -> Resultado<Texto, ErrorTui> {
+    variable resultado = _terminal_leer_tecla()
+    si (resultado == -1) {
+        retornar Error(nuevo ErrorTui("Error al leer tecla", 2))
+    }
+    retornar Ok(resultado)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Tamaño de terminal
+# ═════════════════════════════════════════════════════════════════════════
+
+# Retorna el tamaño de la terminal como (columnas, filas).
+# Internamente parsea el texto "cols,rows" retornado por la native.
+funcion tamano_terminal() -> Resultado<(Entero, Entero), ErrorTui> {
+    variable resultado = _terminal_tamano()
+    si (resultado == -1) {
+        retornar Error(nuevo ErrorTui("Error al obtener tamaño de terminal", 3))
+    }
+    # Parsear "cols,rows"
+    variable coma = encontrar(resultado, ",")
+    si (coma == -1) {
+        retornar Error(nuevo ErrorTui("Formato inválido: " + resultado, 4))
+    }
+    variable cols = subcadena(resultado, 0, coma)
+    variable rows = subcadena(resultado, coma + 1, longitud(resultado))
+    retornar Ok((a_entero(cols), a_entero(rows)))
+}

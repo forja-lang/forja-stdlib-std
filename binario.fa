@@ -1,0 +1,34 @@
+# módulo: binario
+# Empaquetado y desempaquetado binario (endianness, padding)
+# Uso: importar "std/binario"
+
+importar "std/resultado"
+
+clase ErrorBinario {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+funcion empaquetar(formato: Texto, valores: Arreglo<Entero>) -> Resultado<Texto, ErrorBinario> {
+    retornar _binario_empaquetar(formato, valores);
+}
+
+funcion desempaquetar(formato: Texto, datos: Texto) -> Resultado<Arreglo<Entero>, ErrorBinario> {
+    retornar _binario_desempaquetar(formato, datos);
+}
+
+funcion a_hex(datos: Texto) -> Texto {
+    retornar _binario_a_hex(datos);
+}
+
+funcion desde_hex(hex: Texto) -> Resultado<Texto, ErrorBinario> {
+    retornar _binario_desde_hex(hex);
+}
+
+funcion tamano(formato: Texto) -> Entero {
+    retornar _binario_tamano(formato);
+}

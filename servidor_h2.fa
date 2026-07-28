@@ -6,7 +6,7 @@
 # Depende de funciones nativas _h2_*, _hpack_*, _socket_*, _base64_*
 # Proporciona:
 #   ServidorH2(puerto) - clase servidor HTTP/2
-#   get/post/put/eliminar/patch - registro de rutas
+#   obtener/enviar/actualizar/eliminar/modificar_parcial - registro de rutas
 #   iniciar(servidor) - inicia el bucle de aceptacion
 #   detener(servidor) - detiene el servidor
 
@@ -479,15 +479,15 @@ funcion _registrar_ruta_h2(servidor, metodo: Texto, ruta: Texto, manejador) {
     }
 }
 
-funcion get(servidor, ruta: Texto, manejador) {
+funcion obtener(servidor, ruta: Texto, manejador) {
     _registrar_ruta_h2(servidor, "GET", ruta, manejador)
 }
 
-funcion post(servidor, ruta: Texto, manejador) {
+funcion enviar(servidor, ruta: Texto, manejador) {
     _registrar_ruta_h2(servidor, "POST", ruta, manejador)
 }
 
-funcion put(servidor, ruta: Texto, manejador) {
+funcion actualizar(servidor, ruta: Texto, manejador) {
     _registrar_ruta_h2(servidor, "PUT", ruta, manejador)
 }
 
@@ -495,7 +495,7 @@ funcion eliminar(servidor, ruta: Texto, manejador) {
     _registrar_ruta_h2(servidor, "DELETE", ruta, manejador)
 }
 
-funcion patch(servidor, ruta: Texto, manejador) {
+funcion modificar_parcial(servidor, ruta: Texto, manejador) {
     _registrar_ruta_h2(servidor, "PATCH", ruta, manejador)
 }
 

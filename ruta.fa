@@ -1,0 +1,42 @@
+# módulo: ruta
+# Normalización y manipulación de rutas de archivos
+#
+# Uso: importar "std/ruta"
+#
+# Proporciona:
+#   ruta.normalizar(ruta) -> Texto
+#   ruta.unir(base, ...partes) -> Texto
+#   ruta.extension(archivo) -> Texto
+#   ruta.sin_extension(archivo) -> Texto
+#   ruta.nombre_archivo(ruta) -> Texto
+#   ruta.dir_padre(ruta) -> Texto
+#   ruta.absoluta(ruta) -> Resultado<Texto, ErrorRuta>
+#   ruta.es_absoluta(ruta) -> Booleano
+#   ruta.sep() -> Texto
+
+importar "std/resultado"
+
+clase ErrorRuta {
+    mensaje: Texto; codigo: Entero
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje; este.codigo = codigo
+    }
+}
+
+funcion normalizar(ruta: Texto) -> Texto { retornar _ruta_normalizar(ruta) }
+funcion unir(base: Texto, partes: Texto) -> Texto { retornar _ruta_unir(base, partes) }
+funcion extension(archivo: Texto) -> Texto { retornar _ruta_extension(archivo) }
+funcion sin_extension(archivo: Texto) -> Texto { retornar _ruta_sin_extension(archivo) }
+funcion nombre_archivo(ruta: Texto) -> Texto { retornar _ruta_nombre_archivo(ruta) }
+funcion dir_padre(ruta: Texto) -> Texto { retornar _ruta_dir_padre(ruta) }
+
+funcion absoluta(ruta: Texto) -> Resultado<Texto, ErrorRuta> {
+    variable res = _ruta_absoluta(ruta)
+    si (res == "") {
+        retornar Error(nuevo ErrorRuta("No se pudo resolver la ruta: " + ruta, 1))
+    }
+    retornar Ok(res)
+}
+
+funcion es_absoluta(ruta: Texto) -> Booleano { retornar _ruta_es_absoluta(ruta) }
+funcion sep() -> Texto { retornar _ruta_separador() }

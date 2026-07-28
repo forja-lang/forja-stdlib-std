@@ -1,0 +1,34 @@
+# módulo: url
+# Parseo y construcción segura de URLs
+# Uso: importar "std/url"
+
+importar "std/resultado"
+
+clase ErrorUrl {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+funcion parsear(url: Texto) -> Resultado<URL, ErrorUrl> {
+    retornar _url_parsear(url);
+}
+
+funcion construir(esquema: Texto, host: Texto, puerto: Entero, ruta: Texto, query: Texto) -> Texto {
+    retornar _url_construir(esquema, host, puerto, ruta, query);
+}
+
+funcion codificar(texto: Texto) -> Texto {
+    retornar _url_codificar(texto);
+}
+
+funcion decodificar(texto: Texto) -> Texto {
+    retornar _url_decodificar(texto);
+}
+
+funcion query_parsear(query: Texto) -> Resultado<Arreglo<(Texto, Texto)>, ErrorUrl> {
+    retornar _query_parsear(query);
+}

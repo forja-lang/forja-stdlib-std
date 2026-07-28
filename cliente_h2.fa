@@ -6,8 +6,8 @@
 # Depende de funciones nativas _h2_*, _hpack_*, _socket_*, _base64_*
 # Proporciona:
 #   ClienteH2(url) - clase cliente HTTP/2
-#   get/put/eliminar/patch - solicitudes HTTP
-#   post - solicitud POST
+#   obtener/actualizar/eliminar/modificar_parcial - solicitudes HTTP
+#   enviar - solicitud POST
 
 # ─── Constantes ───────────────────────────────────────────────────────
 constante H2_FRAME_DATA = 0
@@ -395,25 +395,25 @@ funcion _realizar_solicitud(metodo: Texto, url: Texto, cuerpo: Texto, opciones) 
     retornar _cliente_enviar_solicitud(cliente, metodo, ruta, cuerpo, opciones)
 }
 
-funcion get(url: Texto) {
+funcion obtener(url: Texto) {
     variable opciones = nuevo OpcionesClienteH2()
     retornar _realizar_solicitud("GET", url, "", opciones)
 }
 
-funcion get_con_opciones(url: Texto, opciones) {
+funcion obtener_con_opciones(url: Texto, opciones) {
     retornar _realizar_solicitud("GET", url, "", opciones)
 }
 
-funcion post(url: Texto, cuerpo: Texto) {
+funcion enviar(url: Texto, cuerpo: Texto) {
     variable opciones = nuevo OpcionesClienteH2()
     retornar _realizar_solicitud("POST", url, cuerpo, opciones)
 }
 
-funcion post_con_opciones(url: Texto, cuerpo: Texto, opciones) {
+funcion enviar_con_opciones(url: Texto, cuerpo: Texto, opciones) {
     retornar _realizar_solicitud("POST", url, cuerpo, opciones)
 }
 
-funcion put(url: Texto, cuerpo: Texto) {
+funcion actualizar(url: Texto, cuerpo: Texto) {
     variable opciones = nuevo OpcionesClienteH2()
     retornar _realizar_solicitud("PUT", url, cuerpo, opciones)
 }
@@ -423,7 +423,7 @@ funcion eliminar(url: Texto) {
     retornar _realizar_solicitud("DELETE", url, "", opciones)
 }
 
-funcion patch(url: Texto, cuerpo: Texto) {
+funcion modificar_parcial(url: Texto, cuerpo: Texto) {
     variable opciones = nuevo OpcionesClienteH2()
     retornar _realizar_solicitud("PATCH", url, cuerpo, opciones)
 }

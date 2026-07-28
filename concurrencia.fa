@@ -16,10 +16,10 @@
 # lógica y sintaxis, y servir como referencia de la API.
 #
 # Proporciona:
-#   - pool_workers(workers, procesar)    — crea pool de workers
+#   - pool_trabajadores(trabajadores, procesar) — crea pool de trabajadores
 #   - paralelo_for(inicio, fin, w, cb)   — itera rango en paralelo
 #   - mapa_paralelo(arr, workers, cb)    — map sobre arreglo
-#   - con_timeout(ms, callback)          — ejecución con timeout
+#   - con_limite_tiempo(ms, callback)    — ejecución con límite de tiempo
 #   - reintentar(max, callback)          — reintentar hasta N veces
 
 # ============================================================
@@ -33,7 +33,7 @@
 #   - tx_tareas:      canal para enviar tareas
 #   - rx_resultados:  canal para recibir resultados
 #
-funcion pool_workers(num_workers: Entero, procesar) {
+funcion pool_trabajadores(num_trabajadores: Entero, procesar) {
     variable tx_tareas, rx_tareas = canal()
     variable tx_resultados, rx_resultados = canal()
     retornar [tx_tareas, rx_resultados]
@@ -80,10 +80,10 @@ funcion mapa_paralelo(arr, num_workers: Entero, callback) {
 # TIMEOUT
 # ============================================================
 #
-# Ejecuta una función con timeout.
-# Retorna Ok(valor) si terminó, Error("Timeout") si excede el tiempo.
+# Ejecuta una función con límite de tiempo.
+# Retorna Ok(valor) si terminó, Error("Tiempo agotado") si excede el tiempo.
 #
-funcion con_timeout(ms: Entero, callback) {
+funcion con_limite_tiempo(ms: Entero, callback) {
     variable t_inicio = tiempo_actual()
     variable res = callback()
     variable t_fin = tiempo_actual()
@@ -93,7 +93,7 @@ funcion con_timeout(ms: Entero, callback) {
     si (t_total <= limite) {
         retornar Ok(res)
     } sino {
-        retornar Error("Timeout")
+        retornar Error("Tiempo agotado")
     }
 }
 

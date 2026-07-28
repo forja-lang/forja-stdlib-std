@@ -1,0 +1,37 @@
+# módulo: perfilado
+# Benchmarks integrados y medición de rendimiento
+# Uso: importar "std/perfilado"
+
+importar "std/resultado"
+
+clase ErrorPerfilado {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+clase ReportePerfilado {
+    etiqueta: Texto;
+    tiempo_total_ms: Entero;
+    iteraciones: Entero;
+    tiempo_medio_us: Entero;
+}
+
+funcion iniciar(etiqueta: Texto) {
+    _perfilado_iniciar(etiqueta);
+}
+
+funcion detener(etiqueta: Texto) -> Resultado<ReportePerfilado, ErrorPerfilado> {
+    retornar _perfilado_detener(etiqueta);
+}
+
+funcion medir(etiqueta: Texto, iteraciones: Entero, bloque: Texto) -> Resultado<ReportePerfilado, ErrorPerfilado> {
+    retornar _perfilado_medir(etiqueta, iteraciones, bloque);
+}
+
+funcion reportes() -> Arreglo<ReportePerfilado> {
+    retornar _perfilado_reportes();
+}

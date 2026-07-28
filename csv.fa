@@ -1,0 +1,30 @@
+# módulo: csv
+# Parseo y generación de CSV
+# Uso: importar "std/csv"
+
+importar "std/resultado"
+
+clase ErrorCsv {
+    mensaje: Texto;
+    codigo: Entero;
+    constructor(m: Texto, c: Entero) {
+        este.mensaje = m;
+        este.codigo = c;
+    }
+}
+
+funcion parsear(texto: Texto) -> Resultado<Arreglo<Arreglo<Texto>>, ErrorCsv> {
+    retornar _csv_parsear(texto);
+}
+
+funcion parsear_con_cabeceras(texto: Texto) -> Resultado<Arreglo<Mapa<Texto, Texto>>, ErrorCsv> {
+    retornar _csv_parsear_con_cabeceras(texto);
+}
+
+funcion generar(filas: Arreglo<Arreglo<Texto>>) -> Texto {
+    retornar _csv_generar(filas);
+}
+
+funcion generar_con_cabeceras(cabeceras: Arreglo<Texto>, filas: Arreglo<Arreglo<Texto>>) -> Texto {
+    retornar _csv_generar_con_cabeceras(cabeceras, filas);
+}

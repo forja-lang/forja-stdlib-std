@@ -4,7 +4,7 @@
 # Uso: importar "std/matematica"
 
 # Valor absoluto de un número
-funcion abs(x) {
+funcion absoluto(x) {
     si (x < 0) {
         retornar -x
     }
@@ -12,7 +12,7 @@ funcion abs(x) {
 }
 
 # Retorna el mayor entre dos números
-funcion max(a, b) {
+funcion maximo(a, b) {
     si (a > b) {
         retornar a
     }
@@ -20,15 +20,15 @@ funcion max(a, b) {
 }
 
 # Retorna el menor entre dos números
-funcion min(a, b) {
+funcion minimo(a, b) {
     si (a < b) {
         retornar a
     }
     retornar b
 }
 
-# Restringe un valor dentro del rango [min, max]
-funcion clamp(valor, minimo, maximo) {
+# Restringe un valor dentro del rango [minimo, maximo]
+funcion limitar(valor, minimo, maximo) {
     si (valor < minimo) {
         retornar minimo
     }
@@ -193,7 +193,7 @@ funcion redondear_exacto(e: Exacto, decimales: Entero) -> Exacto {
 }
 
 # Valor absoluto de un Exacto
-funcion exacto_abs(e: Exacto) -> Exacto {
+funcion exacto_absoluto(e: Exacto) -> Exacto {
     si (e >= 0) {
         retornar e
     } sino {
@@ -203,8 +203,8 @@ funcion exacto_abs(e: Exacto) -> Exacto {
 
 # Potencia de Exacto (exponente entero, exponenciación binaria)
 # Calcula base^exp usando el algoritmo de exponenciación binaria rápida
-# Ejemplo: exacto_pow(2.0, 3.0) -> 8.0
-funcion exacto_pow(base: Exacto, exp: Exacto) -> Exacto {
+# Ejemplo: exacto_potencia(2.0, 3.0) -> 8.0
+funcion exacto_potencia(base: Exacto, exp: Exacto) -> Exacto {
     # Convertir exponente a entero (trunca si tiene decimales)
     variable n = a_numero(exp)
     variable res: Exacto = 1.0

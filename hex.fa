@@ -1,0 +1,699 @@
+# módulo: hex
+# Descripción: Conversión entre bases numéricas (hexadecimal, decimal, binario, octal)
+#
+# Uso: importar "std/hex"
+#
+# Funciones de conversión:
+#   hex.a_decimal(hex)             — hexadecimal → entero
+#   hex.a_binario(hex)             — hexadecimal → binario (string)
+#   hex.a_octal(hex)               — hexadecimal → octal (string)
+#
+#   hex.decimal_a_hex(n)           — entero → hexadecimal
+#   hex.decimal_a_binario(n)       — entero → binario
+#   hex.decimal_a_octal(n)         — entero → octal
+#
+#   hex.binario_a_decimal(bin)     — binario → entero
+#   hex.binario_a_hex(bin)         — binario → hexadecimal
+#   hex.binario_a_octal(bin)       — binario → octal
+#
+#   hex.octal_a_decimal(oct)       — octal → entero
+#   hex.octal_a_hex(oct)           — octal → hexadecimal
+#   hex.octal_a_binario(oct)       — octal → binario
+#
+# Funciones de texto:
+#   hex.texto_a_hex(texto)         — texto → hexadecimal (cada byte a 2 dígitos hex)
+#   hex.hex_a_texto(hex)           — hexadecimal → texto
+#
+# Funciones genéricas (base 2-36):
+#   hex.base_n_a_decimal(num, base) — cualquier base (2-36) → entero
+#   hex.decimal_a_base_n(n, base)   — entero → cualquier base (2-36)
+#
+# Validación:
+#   hex.validar_hex(s)             — verdadero si s es hexadecimal válido
+#   hex.validar_binario(s)         — verdadero si s es binario válido
+#   hex.validar_octal(s)           — verdadero si s es octal válido
+#   hex.validar_base_n(s, base)    — verdadero si s es válido en la base dada
+#
+# Operaciones bitwise (sobre strings hex):
+#   hex.y_bits(a, b)               — Y bit a bit (AND)
+#   hex.o_bits(a, b)               — O bit a bit (OR)
+#   hex.xor_bits(a, b)             — O exclusiva (XOR) bit a bit
+#   hex.complemento(a)             — complemento (NOT)
+#   hex.desplazar_izquierda(a, n)  — desplazar a la izquierda n bits
+#   hex.desplazar_derecha(a, n)    — desplazar a la derecha n bits
+#
+# Utilidades:
+#   hex.cero()                     — retorna "0"
+#   hex.medir(a)                   — cantidad de dígitos hex (sin prefijo)
+#   hex.iguales(a, b)              — compara si dos hex son iguales
+#   hex.mayor_que(a, b)            — verdadero si a > b
+#   hex.menor_que(a, b)            — verdadero si a < b
+#   hex.sumar(a, b)                — suma dos hex
+#   hex.restar(a, b)               — resta dos hex
+#   hex.multiplicar(a, b)          — multiplica dos hex
+#   hex.dividir(a, b)              — divide dos hex (cociente entero)
+#   hex.modulo(a, b)               — módulo entre dos hex
+#   hex.potencia(a, exp)           — a^exp
+#   hex.mcd(a, b)                  — máximo común divisor
+#   hex.mcm(a, b)                  — mínimo común múltiplo
+
+clase ErrorConversion {
+    mensaje: Texto
+    codigo: Entero
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# VALIDACIÓN
+# ═════════════════════════════════════════════════════════════════════════
+
+# Valida si un string es un número hexadecimal válido (0-9, A-F, a-f)
+funcion validar_hex(s: Texto) -> Booleano {
+    si (longitud(s) == 0) { retornar falso }
+    variable i = 0
+    mientras (i < longitud(s)) {
+        variable c = s[i]
+        si (!((c >= "0" && c <= "9") || (c >= "a" && c <= "f") || (c >= "A" && c <= "F"))) {
+            retornar falso
+        }
+        i = i + 1
+    }
+    retornar verdadero
+}
+
+# Valida si un string es un número binario válido (solo 0 y 1)
+funcion validar_binario(s: Texto) -> Booleano {
+    si (longitud(s) == 0) { retornar falso }
+    variable i = 0
+    mientras (i < longitud(s)) {
+        variable c = s[i]
+        si (c != "0" && c != "1") {
+            retornar falso
+        }
+        i = i + 1
+    }
+    retornar verdadero
+}
+
+# Valida si un string es un número octal válido (0-7)
+funcion validar_octal(s: Texto) -> Booleano {
+    si (longitud(s) == 0) { retornar falso }
+    variable i = 0
+    mientras (i < longitud(s)) {
+        variable c = s[i]
+        si (c < "0" || c > "7") {
+            retornar falso
+        }
+        i = i + 1
+    }
+    retornar verdadero
+}
+
+# Valida si un string es válido en una base dada (2-36)
+funcion validar_base_n(s: Texto, base: Entero) -> Booleano {
+    si (longitud(s) == 0 || base < 2 || base > 36) { retornar falso }
+    variable i = 0
+    mientras (i < longitud(s)) {
+        variable v = _digito_a_valor(s[i])
+        si (v < 0 || v >= base) {
+            retornar falso
+        }
+        i = i + 1
+    }
+    retornar verdadero
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# CONVERSIONES GENÉRICAS
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte un string en cualquier base (2-36) a entero
+# Dígitos: 0-9, A-Z/a-z
+# Retorna Error si el string está vacío, la base es inválida, o hay caracteres no válidos
+funcion base_n_a_decimal(numero: Texto, base: Entero) -> Resultado<Entero, ErrorConversion> {
+    si (base < 2 || base > 36) {
+        retornar Error(nuevo ErrorConversion("Base inválida: " + a_texto(base) + ". Las bases válidas son 2-36", 1))
+    }
+    si (longitud(numero) == 0) {
+        retornar Error(nuevo ErrorConversion("String vacío", 2))
+    }
+
+    variable resultado = 0
+    variable i = 0
+    mientras (i < longitud(numero)) {
+        variable digito = _digito_a_valor(numero[i])
+        si (digito < 0 || digito >= base) {
+            retornar Error(nuevo ErrorConversion("Caracter inválido '" + numero[i] + "' para base " + a_texto(base), 3))
+        }
+        resultado = resultado * base + digito
+        i = i + 1
+    }
+    retornar Ok(resultado)
+}
+
+# Convierte un entero a string en cualquier base (2-36)
+# Los dígitos > 9 se representan con letras mayúsculas (A-Z)
+funcion decimal_a_base_n(n: Entero, base: Entero) -> Resultado<Texto, ErrorConversion> {
+    si (base < 2 || base > 36) {
+        retornar Error(nuevo ErrorConversion("Base inválida: " + a_texto(base) + ". Las bases válidas son 2-36", 1))
+    }
+    si (n == 0) { retornar Ok("0") }
+
+    variable negativo = falso
+    variable valor = n
+    si (valor < 0) {
+        negativo = verdadero
+        valor = -valor
+    }
+
+    variable resultado = ""
+    mientras (valor > 0) {
+        resultado = _valor_a_digito(valor % base) + resultado
+        valor = valor / base
+    }
+
+    si (negativo) {
+        resultado = "-" + resultado
+    }
+    retornar Ok(resultado)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# HEXADECIMAL → OTRAS BASES
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte hexadecimal a entero decimal
+funcion a_decimal(hex: Texto) -> Resultado<Entero, ErrorConversion> {
+    retornar base_n_a_decimal(hex, 16)
+}
+
+# Convierte hexadecimal a string binario
+funcion a_binario(hex: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable n = a_decimal(hex)
+    coincidir (n) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(v) -> { retornar decimal_a_base_n(v, 2) }
+    }
+}
+
+# Convierte hexadecimal a string octal
+funcion a_octal(hex: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable n = a_decimal(hex)
+    coincidir (n) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(v) -> { retornar decimal_a_base_n(v, 8) }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# DECIMAL → OTRAS BASES
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte entero decimal a hexadecimal
+funcion decimal_a_hex(n: Entero) -> Resultado<Texto, ErrorConversion> {
+    retornar decimal_a_base_n(n, 16)
+}
+
+# Convierte entero decimal a binario
+funcion decimal_a_binario(n: Entero) -> Resultado<Texto, ErrorConversion> {
+    retornar decimal_a_base_n(n, 2)
+}
+
+# Convierte entero decimal a octal
+funcion decimal_a_octal(n: Entero) -> Resultado<Texto, ErrorConversion> {
+    retornar decimal_a_base_n(n, 8)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# BINARIO → OTRAS BASES
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte binario a entero decimal
+funcion binario_a_decimal(bin: Texto) -> Resultado<Entero, ErrorConversion> {
+    retornar base_n_a_decimal(bin, 2)
+}
+
+# Convierte binario a hexadecimal
+funcion binario_a_hex(bin: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable n = binario_a_decimal(bin)
+    coincidir (n) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(v) -> { retornar decimal_a_base_n(v, 16) }
+    }
+}
+
+# Convierte binario a octal
+funcion binario_a_octal(bin: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable n = binario_a_decimal(bin)
+    coincidir (n) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(v) -> { retornar decimal_a_base_n(v, 8) }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# OCTAL → OTRAS BASES
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte octal a entero decimal
+funcion octal_a_decimal(oct: Texto) -> Resultado<Entero, ErrorConversion> {
+    retornar base_n_a_decimal(oct, 8)
+}
+
+# Convierte octal a hexadecimal
+funcion octal_a_hex(oct: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable n = octal_a_decimal(oct)
+    coincidir (n) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(v) -> { retornar decimal_a_base_n(v, 16) }
+    }
+}
+
+# Convierte octal a binario
+funcion octal_a_binario(oct: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable n = octal_a_decimal(oct)
+    coincidir (n) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(v) -> { retornar decimal_a_base_n(v, 2) }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# TEXTO ↔ HEXADECIMAL
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte un texto a su representación hexadecimal (cada byte → 2 dígitos hex)
+# Ejemplo: hex.texto_a_hex("Hola") -> "486F6C61"
+funcion texto_a_hex(texto: Texto) -> Texto {
+    variable resultado = ""
+    variable i = 0
+    mientras (i < longitud(texto)) {
+        variable codigo = a_codigo(texto[i])
+        resultado = resultado + _valor_a_digito((codigo >> 4) & 15)
+        resultado = resultado + _valor_a_digito(codigo & 15)
+        i = i + 1
+    }
+    retornar resultado
+}
+
+# Convierte un string hexadecimal a su texto original (2 dígitos hex → 1 byte)
+# Retorna Error si la longitud del hex es impar o contiene caracteres inválidos
+funcion hex_a_texto(hex: Texto) -> Resultado<Texto, ErrorConversion> {
+    si (longitud(hex) % 2 != 0) {
+        retornar Error(nuevo ErrorConversion("La longitud del hex debe ser par: " + hex, 4))
+    }
+    si (!validar_hex(hex)) {
+        retornar Error(nuevo ErrorConversion("String hexadecimal inválido: " + hex, 5))
+    }
+
+    variable resultado = ""
+    variable i = 0
+    mientras (i < longitud(hex)) {
+        variable alto = _digito_a_valor(hex[i])
+        variable bajo = _digito_a_valor(hex[i + 1])
+        resultado = resultado + a_caracter(alto * 16 + bajo)
+        i = i + 2
+    }
+    retornar Ok(resultado)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# OPERACIONES BITWISE SOBRE STRINGS HEX
+# ═════════════════════════════════════════════════════════════════════════
+
+# Operación Y bit a bit (AND) entre dos strings hex
+funcion y_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar decimal_a_base_n(va & vb, 16) }
+            }
+        }
+    }
+}
+
+# Operación O bit a bit (OR) entre dos strings hex
+funcion o_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar decimal_a_base_n(va | vb, 16) }
+            }
+        }
+    }
+}
+
+# Operación O exclusiva (XOR) bit a bit entre dos strings hex
+funcion xor_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar decimal_a_base_n(va ^ vb, 16) }
+            }
+        }
+    }
+}
+
+# Operación complemento (NOT) sobre un string hex
+# Invierte todos los bits del valor
+funcion complemento(a: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(va) -> { retornar decimal_a_base_n(~va, 16) }
+    }
+}
+
+# Desplaza los bits a la izquierda n posiciones
+funcion desplazar_izquierda(a: Texto, n: Entero) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(va) -> { retornar decimal_a_base_n(va << n, 16) }
+    }
+}
+
+# Desplaza los bits a la derecha n posiciones
+funcion desplazar_derecha(a: Texto, n: Entero) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+        caso Ok(va) -> { retornar decimal_a_base_n(va >> n, 16) }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# ARITMÉTICA HEX
+# ═════════════════════════════════════════════════════════════════════════
+
+# Suma dos números hexadecimales
+funcion sumar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar decimal_a_base_n(va + vb, 16) }
+            }
+        }
+    }
+}
+
+# Resta dos números hexadecimales (a - b)
+funcion restar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar decimal_a_base_n(va - vb, 16) }
+            }
+        }
+    }
+}
+
+# Multiplica dos números hexadecimales
+funcion multiplicar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar decimal_a_base_n(va * vb, 16) }
+            }
+        }
+    }
+}
+
+# Divide dos números hexadecimales (cociente entero)
+funcion dividir(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> {
+                    si (vb == 0) {
+                        retornar Error(nuevo ErrorConversion("División por cero", 6))
+                    }
+                    retornar decimal_a_base_n(va / vb, 16)
+                }
+            }
+        }
+    }
+}
+
+# Módulo entre dos números hexadecimales
+funcion modulo(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> {
+                    si (vb == 0) {
+                        retornar Error(nuevo ErrorConversion("Módulo por cero", 7))
+                    }
+                    retornar decimal_a_base_n(va - ((va / vb) * vb), 16)
+                }
+            }
+        }
+    }
+}
+
+# Potencia: a^exp (exponente entero no negativo)
+funcion potencia(a: Texto, exp: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable base_n = a_decimal(a)
+    variable exp_n = a_decimal(exp)
+    coincidir (base_n) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (exp_n) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (base_n) {
+        caso Ok(va) -> {
+            coincidir (exp_n) {
+                caso Ok(ve) -> {
+                    variable resultado = 1
+                    variable i = 0
+                    mientras (i < ve) {
+                        resultado = resultado * va
+                        i = i + 1
+                    }
+                    retornar decimal_a_base_n(resultado, 16)
+                }
+            }
+        }
+    }
+}
+
+# Máximo Común Divisor (algoritmo de Euclides)
+funcion mcd(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> {
+                    variable x = va
+                    variable y = vb
+                    mientras (y > 0) {
+                        variable temp = y
+                        variable resto = x - ((x / y) * y)
+                        y = resto
+                        x = temp
+                    }
+                    retornar decimal_a_base_n(x, 16)
+                }
+            }
+        }
+    }
+}
+
+# Mínimo Común Múltiplo
+funcion mcm(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> {
+                    si (va == 0 || vb == 0) {
+                        retornar Ok("0")
+                    }
+
+                    # Calcular mcd primero
+                    variable x = va
+                    variable y = vb
+                    mientras (y > 0) {
+                        variable temp = y
+                        variable resto = x - ((x / y) * y)
+                        y = resto
+                        x = temp
+                    }
+                    retornar decimal_a_base_n((va / x) * vb, 16)
+                }
+            }
+        }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# COMPARACIÓN
+# ═════════════════════════════════════════════════════════════════════════
+
+# Retorna "0" (string hex para el valor 0)
+funcion cero() -> Texto {
+    retornar "0"
+}
+
+# Retorna la cantidad de dígitos hex (sin prefijo ni espacios)
+funcion medir(a: Texto) -> Resultado<Entero, ErrorConversion> {
+    si (!validar_hex(a)) {
+        retornar Error(nuevo ErrorConversion("Hexadecimal inválido: " + a, 5))
+    }
+    retornar Ok(longitud(a))
+}
+
+# Compara si dos strings hex representan el mismo valor
+funcion iguales(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar Ok(va == vb) }
+            }
+        }
+    }
+}
+
+# Verdadero si a > b
+funcion mayor_que(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar Ok(va > vb) }
+            }
+        }
+    }
+}
+
+# Verdadero si a < b
+funcion menor_que(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
+    variable na = a_decimal(a)
+    variable nb = a_decimal(b)
+    coincidir (na) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (nb) {
+        caso Error(e) -> { retornar Error(e) }
+    }
+    coincidir (na) {
+        caso Ok(va) -> {
+            coincidir (nb) {
+                caso Ok(vb) -> { retornar Ok(va < vb) }
+            }
+        }
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# HELPERS INTERNOS
+# ═════════════════════════════════════════════════════════════════════════
+
+# Convierte un caracter (0-9, A-Z, a-z) a su valor numérico (0-35)
+# Retorna -1 si el caracter no es válido
+funcion _digito_a_valor(c: Texto) -> Entero {
+    si (c >= "0" && c <= "9") { retornar a_codigo(c) - 48 }
+    si (c >= "A" && c <= "Z") { retornar a_codigo(c) - 65 + 10 }
+    si (c >= "a" && c <= "z") { retornar a_codigo(c) - 97 + 10 }
+    retornar -1
+}
+
+# Convierte un valor numérico (0-35) a su caracter
+# 0-9 → '0'-'9', 10-35 → 'A'-'Z'
+funcion _valor_a_digito(v: Entero) -> Texto {
+    si (v < 10) { retornar a_caracter(48 + v) }
+    retornar a_caracter(65 + v - 10)
+}

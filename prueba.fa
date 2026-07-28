@@ -4,12 +4,12 @@
 /// Ejemplo: asegurar(suma(2, 2) == 4)
 funcion asegurar(condicion) {
     si (no condicion) {
-        retornar error_assertion("La aserción falló")
+        retornar error_verificacion("La aserción falló")
     }
 }
 
 /// Función interna para reportar error de aserción
-funcion error_assertion(mensaje) {
+funcion error_verificacion(mensaje) {
     // En la transpilación a Rust, esto se convierte en panic!
     // En VM, lanza una excepción que detiene el test
     escribir("❌ " + mensaje)

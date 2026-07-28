@@ -1,0 +1,44 @@
+# módulo: temporizador
+# Timers de alta precisión, ejecución diferida, timeouts
+#
+# Uso: importar "std/temporizador"
+#
+# Proporciona:
+#   temporizador.nuevo(duracion_ms) -> Timer
+#   timer.esperar()
+#   timer.cancelar()
+#   timer.restante_ms() -> Entero
+#   temporizador.dormir(ms)
+#   temporizador.medir() -> Medicion
+
+importar "std/resultado"
+
+clase ErrorTemporizador {
+    mensaje: Texto; codigo: Entero
+    constructor(m: Texto, c: Entero) { este.mensaje = m; este.codigo = c }
+}
+
+clase Timer {
+    id: Entero
+    duracion_ms: Entero
+    activo: Booleano
+}
+
+clase Medicion {
+    inicio_ms: Entero
+    fin_ms: Entero
+
+    funcion duracion(self) -> Entero { retornar self.fin_ms - self.inicio_ms }
+}
+
+funcion nuevo(duracion_ms: Entero) -> Timer {
+    retornar _temporizador_nuevo(duracion_ms)
+}
+
+funcion dormir(ms: Entero) {
+    _temporizador_dormir(ms)
+}
+
+funcion medir(inicio: Entero) -> Medicion {
+    retornar nuevo Medicion(inicio, _sistema_tiempo_ms())
+}

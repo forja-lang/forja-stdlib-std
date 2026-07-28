@@ -107,7 +107,7 @@ funcion reemplazar(texto, original, remplazo) {
     retornar resultado
 }
 
-funcion trim(s) {
+funcion recortar(s) {
     variable inicio = 0
     variable fin = longitud(s) - 1
     mientras (inicio <= fin && (s[inicio] == " " || s[inicio] == "\t" || s[inicio] == "\n")) {

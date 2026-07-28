@@ -188,15 +188,15 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
     }
 }
 
-funcion get(servidor, ruta: Texto, manejador) {
+funcion obtener(servidor, ruta: Texto, manejador) {
     _registrar_ruta(servidor, "GET", ruta, manejador)
 }
 
-funcion post(servidor, ruta: Texto, manejador) {
+funcion enviar(servidor, ruta: Texto, manejador) {
     _registrar_ruta(servidor, "POST", ruta, manejador)
 }
 
-funcion put(servidor, ruta: Texto, manejador) {
+funcion actualizar(servidor, ruta: Texto, manejador) {
     _registrar_ruta(servidor, "PUT", ruta, manejador)
 }
 
@@ -204,7 +204,7 @@ funcion eliminar(servidor, ruta: Texto, manejador) {
     _registrar_ruta(servidor, "DELETE", ruta, manejador)
 }
 
-funcion patch(servidor, ruta: Texto, manejador) {
+funcion modificar_parcial(servidor, ruta: Texto, manejador) {
     _registrar_ruta(servidor, "PATCH", ruta, manejador)
 }
 
