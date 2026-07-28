@@ -19,6 +19,7 @@
 #
 # Derivación de claves:
 #   crypto.pbkdf2(password, salt, iteraciones, longitud) — PBKDF2-HMAC-SHA256
+#   crypto.scrypt(password, salt, n, r, longitud)       — memory-hard KDF (RFC 7914)
 #   crypto.hash_password(password)     — genera hash con salt automático
 #   crypto.verify_password(password, hash) — verifica contra hash
 
@@ -129,6 +130,22 @@ funcion aead_decrypt(clave: Texto, nonce: Texto, cifrado: Texto, ad: Texto) -> R
 # ═════════════════════════════════════════════════════════════════════════
 # DERIVACIÓN DE CLAVES
 # ═════════════════════════════════════════════════════════════════════════
+
+# scrypt: memory-hard KDF (RFC 7914), resistente a ataques con ASIC/GPU
+# password: contraseña
+# salt: salt criptográfico
+# n: costo de CPU/memoria (potencia de 2, ej: 16384)
+# r: tamaño de bloque (ej: 8)
+# longitud: longitud deseada en bytes de la clave derivada
+funcion scrypt(password: Texto, salt: Texto, n: Entero, r: Entero, longitud: Entero) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(password) == 0 || longitud(salt) == 0) {
+        retornar Error(nuevo ErrorCrypto("Password y salt no pueden estar vacíos", 6))
+    }
+    si (n < 2 || (n & (n - 1)) != 0) {
+        retornar Error(nuevo ErrorCrypto("n debe ser potencia de 2 y >= 2", 10))
+    }
+    retornar Ok(_scrypt(password, salt, n, r, longitud))
+}
 
 # PBKDF2-HMAC-SHA256: deriva una clave a partir de una contraseña y salt
 # password: contraseña
