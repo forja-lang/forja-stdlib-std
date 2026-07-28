@@ -1,25 +1,68 @@
 # módulo: hash
-# Funciones hash criptográficas
+# Funciones hash criptográficas y HMAC
 #
 # Uso: importar "std/hash"
 #
 # Proporciona:
-#   - sha256(datos)              — calcula SHA-256 de un texto
-#
-# SHA-256 usa implementación nativa Rust (crate sha2).
+#   - sha1(datos)                  — SHA-1 (160 bits, 40 hex)
+#   - sha224(datos)                — SHA-224 (224 bits, 56 hex)
+#   - sha256(datos)                — SHA-256 (256 bits, 64 hex)
+#   - sha384(datos)                — SHA-384 (384 bits, 96 hex)
+#   - sha512(datos)                — SHA-512 (512 bits, 128 hex)
+#   - hmac_sha256(clave, datos)    — HMAC-SHA256 (256 bits, 64 hex)
 
 clase ErrorHash {
     mensaje: Texto
     codigo: Entero
 }
 
+# Calcula SHA-1 de un texto, retorna hash hexadecimal (40 caracteres en minúscula)
+funcion sha1(datos: Texto) -> Resultado<Texto, ErrorHash> {
+    si (datos == "") {
+        retornar Error(nuevo ErrorHash("Los datos no pueden estar vacíos", -1))
+    }
+    retornar Ok(_sha1(datos))
+}
+
+# Calcula SHA-224 de un texto, retorna hash hexadecimal (56 caracteres en minúscula)
+funcion sha224(datos: Texto) -> Resultado<Texto, ErrorHash> {
+    si (datos == "") {
+        retornar Error(nuevo ErrorHash("Los datos no pueden estar vacíos", -1))
+    }
+    retornar Ok(_sha224(datos))
+}
+
 # Calcula SHA-256 de un texto, retorna hash hexadecimal (64 caracteres en minúscula)
-# Ejemplo: sha256("hola") → "4d14b0c60b93b61f1b81d3e24c5df1d2b1d5c7c5d5c6c7c8c9cacbccdcecfcf0"
-# La cadena vacía retorna Error porque no tiene significado hash
 funcion sha256(datos: Texto) -> Resultado<Texto, ErrorHash> {
     si (datos == "") {
         retornar Error(nuevo ErrorHash("Los datos no pueden estar vacíos", -1))
     }
-    variable resultado = _sha256(datos)
-    retornar Ok(resultado)
+    retornar Ok(_sha256(datos))
+}
+
+# Calcula SHA-384 de un texto, retorna hash hexadecimal (96 caracteres en minúscula)
+funcion sha384(datos: Texto) -> Resultado<Texto, ErrorHash> {
+    si (datos == "") {
+        retornar Error(nuevo ErrorHash("Los datos no pueden estar vacíos", -1))
+    }
+    retornar Ok(_sha384(datos))
+}
+
+# Calcula SHA-512 de un texto, retorna hash hexadecimal (128 caracteres en minúscula)
+funcion sha512(datos: Texto) -> Resultado<Texto, ErrorHash> {
+    si (datos == "") {
+        retornar Error(nuevo ErrorHash("Los datos no pueden estar vacíos", -1))
+    }
+    retornar Ok(_sha512(datos))
+}
+
+# Calcula HMAC-SHA256 de un mensaje con una clave
+# clave: texto usado como clave secreta
+# datos: mensaje a autenticar
+# Retorna: hash hexadecimal HMAC-SHA256 (64 caracteres en minúscula)
+funcion hmac_sha256(clave: Texto, datos: Texto) -> Resultado<Texto, ErrorHash> {
+    si (clave == "" || datos == "") {
+        retornar Error(nuevo ErrorHash("Clave y datos no pueden estar vacíos", -1))
+    }
+    retornar Ok(_hmac_sha256(clave, datos))
 }
