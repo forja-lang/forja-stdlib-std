@@ -1,0 +1,163 @@
+# módulo: crypto
+# Criptografía moderna: cifrado, AEAD, hash de contraseñas, aleatoriedad segura
+#
+# Uso: importar "std/crypto"
+#
+# Aleatoriedad:
+#   crypto.random_bytes(n)           — n bytes aleatorios seguros
+#   crypto.salt(n)                   — alias: n bytes de salt criptográfico
+#
+# Tiempo constante:
+#   crypto.constant_time_equal(a, b) — compara dos textos sin timing leak
+#
+# Cifrado simétrico:
+#   crypto.aes_encrypt(clave, iv, datos)     — AES-256-CBC
+#   crypto.aes_decrypt(clave, iv, cifrado)   — AES-256-CBC descifrado
+#   crypto.chacha20(clave, nonce, datos)     — ChaCha20 stream cipher
+#   crypto.aead_encrypt(clave, nonce, datos, ad)  — ChaCha20-Poly1305 cifrado autenticado
+#   crypto.aead_decrypt(clave, nonce, cifrado, ad) — ChaCha20-Poly1305 descifrado verificado
+#
+# Derivación de claves:
+#   crypto.pbkdf2(password, salt, iteraciones, longitud) — PBKDF2-HMAC-SHA256
+#   crypto.hash_password(password)     — genera hash con salt automático
+#   crypto.verify_password(password, hash) — verifica contra hash
+
+clase ErrorCrypto {
+    mensaje: Texto
+    codigo: Entero
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# ALEATORIEDAD SEGURA
+# ═════════════════════════════════════════════════════════════════════════
+
+# Genera n bytes criptográficamente aleatorios
+funcion random_bytes(n: Entero) -> Resultado<Texto, ErrorCrypto> {
+    si (n <= 0) {
+        retornar Error(nuevo ErrorCrypto("n debe ser positivo", 1))
+    }
+    retornar Ok(_random_bytes(n))
+}
+
+# Genera n bytes de salt criptográfico (alias)
+funcion salt(n: Entero) -> Resultado<Texto, ErrorCrypto> {
+    retornar random_bytes(n)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# TIEMPO CONSTANTE
+# ═════════════════════════════════════════════════════════════════════════
+
+# Compara dos textos en tiempo constante (protege contra timing attacks)
+funcion constant_time_equal(a: Texto, b: Texto) -> Booleano {
+    retornar _constant_time_equal(a, b)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# AES-256-CBC
+# ═════════════════════════════════════════════════════════════════════════
+
+# Cifra datos con AES-256-CBC
+# clave: 32 bytes, iv: 16 bytes
+funcion aes_encrypt(clave: Texto, iv: Texto, datos: Texto) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(clave) != 32) {
+        retornar Error(nuevo ErrorCrypto("AES-256: clave debe ser 32 bytes", 2))
+    }
+    si (longitud(iv) != 16) {
+        retornar Error(nuevo ErrorCrypto("AES-256: IV debe ser 16 bytes", 3))
+    }
+    retornar Ok(_aes256_cbc_encrypt(clave, iv, datos))
+}
+
+# Descifra datos con AES-256-CBC
+# clave: 32 bytes, iv: 16 bytes
+funcion aes_decrypt(clave: Texto, iv: Texto, cifrado: Texto) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(clave) != 32) {
+        retornar Error(nuevo ErrorCrypto("AES-256: clave debe ser 32 bytes", 2))
+    }
+    si (longitud(iv) != 16) {
+        retornar Error(nuevo ErrorCrypto("AES-256: IV debe ser 16 bytes", 3))
+    }
+    retornar Ok(_aes256_cbc_decrypt(clave, iv, cifrado))
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# ChaCha20 (stream cipher)
+# ═════════════════════════════════════════════════════════════════════════
+
+# Cifra/descifra datos con ChaCha20 (XOR keystream)
+# clave: 32 bytes, nonce: 12 bytes
+funcion chacha20(clave: Texto, nonce: Texto, datos: Texto) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(clave) != 32) {
+        retornar Error(nuevo ErrorCrypto("ChaCha20: clave debe ser 32 bytes", 4))
+    }
+    si (longitud(nonce) != 12) {
+        retornar Error(nuevo ErrorCrypto("ChaCha20: nonce debe ser 12 bytes", 5))
+    }
+    retornar Ok(_chacha20_xor(clave, nonce, datos))
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# ChaCha20-Poly1305 AEAD (cifrado autenticado)
+# ═════════════════════════════════════════════════════════════════════════
+
+# Cifra autenticado con ChaCha20-Poly1305
+# clave: 32 bytes, nonce: 12 bytes, datos: mensaje, ad: datos asociados (puede ser "")
+# Retorna: cifrado || tag (últimos 16 bytes)
+funcion aead_encrypt(clave: Texto, nonce: Texto, datos: Texto, ad: Texto) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(clave) != 32) {
+        retornar Error(nuevo ErrorCrypto("ChaCha20: clave debe ser 32 bytes", 4))
+    }
+    si (longitud(nonce) != 12) {
+        retornar Error(nuevo ErrorCrypto("ChaCha20: nonce debe ser 12 bytes", 5))
+    }
+    retornar Ok(_chacha20_poly1305_encrypt(clave, nonce, datos, ad))
+}
+
+# Descifra y verifica con ChaCha20-Poly1305
+# Retorna Error si el tag es inválido (datos alterados)
+funcion aead_decrypt(clave: Texto, nonce: Texto, cifrado: Texto, ad: Texto) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(clave) != 32) {
+        retornar Error(nuevo ErrorCrypto("ChaCha20: clave debe ser 32 bytes", 4))
+    }
+    si (longitud(nonce) != 12) {
+        retornar Error(nuevo ErrorCrypto("ChaCha20: nonce debe ser 12 bytes", 5))
+    }
+    retornar Ok(_chacha20_poly1305_decrypt(clave, nonce, cifrado, ad))
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# DERIVACIÓN DE CLAVES
+# ═════════════════════════════════════════════════════════════════════════
+
+# PBKDF2-HMAC-SHA256: deriva una clave a partir de una contraseña y salt
+# password: contraseña
+# salt: salt criptográfico
+# iteraciones: número de iteraciones (recomendado >= 600000)
+# longitud: longitud deseada en bytes de la clave derivada
+funcion pbkdf2(password: Texto, salt: Texto, iteraciones: Entero, longitud: Entero) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(password) == 0 || longitud(salt) == 0) {
+        retornar Error(nuevo ErrorCrypto("Password y salt no pueden estar vacíos", 6))
+    }
+    si (iteraciones < 1) {
+        retornar Error(nuevo ErrorCrypto("Iteraciones debe ser >= 1", 7))
+    }
+    si (longitud < 1) {
+        retornar Error(nuevo ErrorCrypto("Longitud debe ser >= 1", 8))
+    }
+    retornar Ok(_pbkdf2(password, salt, iteraciones, longitud))
+}
+
+# Genera un hash de contraseña seguro con salt aleatorio automático
+# Formato: $pbkdf2-sha256$iteraciones$salt_hex$hash_hex
+funcion hash_password(password: Texto) -> Resultado<Texto, ErrorCrypto> {
+    si (longitud(password) == 0) {
+        retornar Error(nuevo ErrorCrypto("Password no puede estar vacía", 9))
+    }
+    retornar Ok(_hash_password(password))
+}
+
+# Verifica una contraseña contra un hash generado por hash_password
+funcion verify_password(password: Texto, hash: Texto) -> Booleano {
+    retornar _verify_password(password, hash)
+}
