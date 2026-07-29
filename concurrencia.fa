@@ -1,29 +1,20 @@
 # módulo: concurrencia
-# Patrones de concurrencia de alto nivel
+# Patrones de concurrencia de alto nivel (CSP + async/await)
 #
 # Uso: importar "std/concurrencia"
 #
-# ADVERTENCIA: La VM actual de Forja NO implementa las primitivas nativas
-# de concurrencia (hilo, canal, seleccionar). Además, tiene bugs con
-# empujar() y asignación por índice en arreglos, lo que limita la
-# construcción de arreglos de resultados.
-#
-# Este módulo proporciona la API estándar para patrones de concurrencia.
-# Cuando la VM implemente concurrencia real y corrija los bugs de
-# arreglos, las funciones funcionarán completamente.
-#
-# Mientras tanto, las funciones están diseñadas para ser correctas en
-# lógica y sintaxis, y servir como referencia de la API.
-#
 # Proporciona:
-#   - pool_trabajadores(trabajadores, procesar) — crea pool de trabajadores
-#   - paralelo_for(inicio, fin, w, cb)   — itera rango en paralelo
-#   - mapa_paralelo(arr, workers, cb)    — map sobre arreglo
-#   - con_limite_tiempo(ms, callback)    — ejecución con límite de tiempo
-#   - reintentar(max, callback)          — reintentar hasta N veces
+#   - pool_trabajadores(n, procesar)  — pool de workers (clásico)
+#   - paralelo_for(inicio, fin, cb)   — itera rango en paralelo
+#   - mapa_paralelo(arr, cb)          — map sobre arreglo
+#   - con_limite_tiempo(ms, cb)       — ejecución con límite de tiempo
+#   - reintentar(max, cb)             — reintentar hasta N veces
+#   - async/await: funciones asincrónicas con thread pool real
+#   - mapa_async(arr, cb)            — map async con hilos reales
+#   - paralelo_for_async(inicio,fin) — for async con hilos reales
 
 # ============================================================
-# WORKER POOL
+# WORKER POOL (clásico)
 # ============================================================
 #
 # Crea un pool de N workers que procesan tareas en paralelo.
@@ -40,25 +31,30 @@ funcion pool_trabajadores(num_trabajadores: Entero, procesar) {
 }
 
 # ============================================================
-# PARALLEL FOR
+# PARALLEL FOR (clásico)
 # ============================================================
 #
 # Ejecuta N iteraciones en paralelo usando M workers.
 # Retorna arreglo con resultados.
 #
 funcion paralelo_for(inicio: Entero, fin: Entero, num_workers: Entero, callback) {
+    variable n = fin - inicio
     variable res = []
+    variable k = 0
+    mientras (k < n) {
+        res[k] = nulo
+        k = k + 1
+    }
     variable i = inicio
     mientras (i < fin) {
-        variable v = callback(i)
-        res.empujar(v)
+        res[i - inicio] = callback(i)
         i = i + 1
     }
     retornar res
 }
 
 # ============================================================
-# MAPA PARALELO
+# MAPA PARALELO (clásico)
 # ============================================================
 #
 # Aplica una función a cada elemento de un arreglo en paralelo.
@@ -67,17 +63,21 @@ funcion paralelo_for(inicio: Entero, fin: Entero, num_workers: Entero, callback)
 funcion mapa_paralelo(arr, num_workers: Entero, callback) {
     variable n = longitud(arr)
     variable res = []
+    variable k = 0
+    mientras (k < n) {
+        res[k] = nulo
+        k = k + 1
+    }
     variable i = 0
     mientras (i < n) {
-        variable v = callback(arr[i])
-        res.empujar(v)
+        res[i] = callback(arr[i])
         i = i + 1
     }
     retornar res
 }
 
 # ============================================================
-# TIMEOUT
+# TIMEOUT (clásico)
 # ============================================================
 #
 # Ejecuta una función con límite de tiempo.
@@ -119,4 +119,181 @@ funcion reintentar(max_intentos: Entero, callback) {
     }
 
     retornar Error(ultimo_error)
+}
+
+# ============================================================
+# ASYNC / AWAIT — Funciones asincrónicas con hilo real
+# ============================================================
+#
+# NOTA: Estas funciones usan `hilo` (ThreadSpawn) para paralelismo
+# real. Cada tarea async se ejecuta en un hilo del SO a través
+# del ThreadPool de Forja (std::thread::spawn).
+#
+# Las funciones asincrónicas se declaran con:
+#   funcion asincrona nombre() -> Tipo { ... }
+#
+# Y se invocan con:
+#   variable future = nombre()
+#   variable resultado = await future
+#
+# También se puede usar .unir() en lugar de await:
+#   variable resultado = future.unir()
+
+# ============================================================
+# MAPA ASYNC
+# ============================================================
+#
+# Aplica un callback a cada elemento usando hilos reales.
+# Retorna un arreglo con los resultados (orden original).
+#
+funcion mapa_async(arr: Arreglo, callback: Funcion) -> Arreglo {
+    variable n = longitud(arr)
+    variable resultados = []
+    variable futures = []
+
+    # Pre-dimensionar arreglos
+    variable k = 0
+    mientras (k < n) {
+        resultados[k] = nulo
+        k = k + 1
+    }
+
+    # Lanzar un hilo por elemento
+    variable i = 0
+    mientras (i < n) {
+        variable valor = arr[i]
+        futures[i] = hilo {
+            variable r = callback(valor)
+            retornar r
+        }
+        i = i + 1
+    }
+
+    # Recoger resultados en orden
+    variable j = 0
+    mientras (j < n) {
+        resultados[j] = futures[j].unir()
+        j = j + 1
+    }
+
+    retornar resultados
+}
+
+# ============================================================
+# PARALLEL FOR ASYNC
+# ============================================================
+#
+# Ejecuta un callback en paralelo para cada índice en [inicio, fin)
+# usando hilos reales. Retorna arreglo con resultados.
+#
+funcion paralelo_for_async(inicio: Entero, fin: Entero, callback: Funcion) -> Arreglo {
+    variable n = fin - inicio
+    variable resultados = []
+    variable futures = []
+
+    # Pre-dimensionar arreglos
+    variable k = 0
+    mientras (k < n) {
+        resultados[k] = nulo
+        k = k + 1
+    }
+
+    # Lanzar un hilo por iteración
+    variable i = inicio
+    mientras (i < fin) {
+        variable idx = i
+        futures[i - inicio] = hilo {
+            variable r = callback(idx)
+            retornar r
+        }
+        i = i + 1
+    }
+
+    # Recoger resultados en orden
+    variable j = 0
+    mientras (j < n) {
+        resultados[j] = futures[j].unir()
+        j = j + 1
+    }
+
+    retornar resultados
+}
+
+# ============================================================
+# POOL DE TRABAJADORES ASYNC
+# ============================================================
+#
+# Crea un pool de N workers que procesan tareas en paralelo real.
+# Cada worker ejecuta tareas en su propio hilo.
+#
+# Retorna [tx_tareas, rx_resultados]:
+#   - tx_tareas:      canal para enviar tareas
+#   - rx_resultados:  canal para recibir resultados
+#
+funcion pool_async(num_trabajadores: Entero, procesar: Funcion) -> Arreglo {
+    variable tx_tareas, rx_tareas = canal()
+    variable tx_resultados, rx_resultados = canal()
+
+    # Lanzar N workers en hilos reales
+    variable w = 0
+    mientras (w < num_trabajadores) {
+        variable id = w
+        hilo {
+            # Cada worker espera tareas del canal
+            variable continuar = verdadero
+            mientras (continuar) {
+                variable tarea = rx_tareas.recibir()
+                si (tarea == nulo) {
+                    continuar = falso
+                } sino {
+                    variable resultado = procesar(tarea)
+                    tx_resultados.enviar(resultado)
+                }
+            }
+        }
+        w = w + 1
+    }
+
+    retornar [tx_tareas, rx_resultados]
+}
+
+# ============================================================
+# TIMEOUT ASYNC
+# ============================================================
+#
+# Ejecuta una función asincrónicamente con límite de tiempo.
+# Retorna Ok(valor) si terminó, Error("Tiempo agotado") si excede.
+#
+# Usa un hilo real y espera con timeout.
+#
+funcion con_timeout_async(ms: Entero, callback: Funcion) -> Resultado {
+    variable tx, rx = canal()
+
+    # Lanzar la tarea en un hilo
+    hilo {
+        variable res = callback()
+        tx.enviar(res)
+    }
+
+    # Esperar con timeout (usando try_recibir en bucle)
+    variable t_inicio = tiempo_actual()
+    variable limite = ms / 1000
+    variable resultado = nulo
+    variable obtenido = falso
+
+    mientras (no obtenido) {
+        variable dato = rx.try_recibir()
+        si (dato != nulo) {
+            resultado = dato
+            obtenido = verdadero
+        } sino {
+            variable t_actual = tiempo_actual()
+            si ((t_actual - t_inicio) > limite) {
+                retornar Error("Tiempo agotado")
+            }
+            esperar(10)  # Pequeña pausa para no saturar CPU
+        }
+    }
+
+    retornar Ok(resultado)
 }

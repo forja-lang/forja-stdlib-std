@@ -1,6 +1,9 @@
 # módulo: ffi
 # Foreign Function Interface para llamar librerías C
 # Uso: importar "std/ffi"
+#
+# Las librerías se cargan con: importar externa "ruta.dll"
+# Luego se obtienen funciones y se llaman con este módulo.
 
 importar "std/resultado"
 
@@ -13,22 +16,17 @@ clase ErrorFFI {
     }
 }
 
-funcion cargar_libreria(ruta: Texto) -> Resultado<Entero, ErrorFFI> {
-    retornar _ffi_cargar_libreria(ruta);
+# Obtiene un puntero a función desde una librería ya cargada con importar externa
+funcion obtener_funcion(ruta: Texto, nombre: Texto) -> Resultado<Entero, ErrorFFI> {
+    retornar _ffi_obtener_funcion(ruta, nombre);
 }
 
-funcion obtener_funcion(lib: Entero, nombre: Texto) -> Resultado<Entero, ErrorFFI> {
-    retornar _ffi_obtener_funcion(lib, nombre);
-}
-
+# Llama una función FFI que retorna Entero
 funcion llamar_entero(fn_ptr: Entero, args: Arreglo<Entero>) -> Resultado<Entero, ErrorFFI> {
     retornar _ffi_llamar_entero(fn_ptr, args);
 }
 
+# Llama una función FFI que retorna Texto
 funcion llamar_texto(fn_ptr: Entero, args: Arreglo<Texto>) -> Resultado<Texto, ErrorFFI> {
     retornar _ffi_llamar_texto(fn_ptr, args);
-}
-
-funcion liberar(lib: Entero) {
-    _ffi_liberar(lib);
 }
