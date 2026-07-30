@@ -2,10 +2,10 @@
 # Red avanzada (DNS, DoH, DoT, ICMP Ping, Interfaces, MAC) para Forja
 # Proporciona utilidades y resolución de nombres segura y de alto nivel.
 #
-# Uso: importar "std/red"
+# Uso: importar std/red
 
-importar "std/resultado"
-importar "std/texto"
+importar std/resultado
+importar std/texto
 
 # ══════════════════════════════════════════════════════════════════════
 # Clases de Dominio

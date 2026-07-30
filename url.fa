@@ -1,8 +1,8 @@
 # módulo: url
 # Parseo y construcción segura de URLs
-# Uso: importar "std/url"
+# Uso: importar std/url
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorUrl {
     mensaje: Texto;

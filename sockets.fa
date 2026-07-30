@@ -5,9 +5,9 @@
 # Las funciones internas _socket_* son proporcionadas por la VM
 # y no deben llamarse directamente desde código de usuario.
 #
-# Uso: importar "std/sockets"
+# Uso: importar std/sockets
 
-importar "std/resultado"
+importar std/resultado
 
 # ══════════════════════════════════════════════════════════════════════
 # Tipos de Error

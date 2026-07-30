@@ -1,8 +1,8 @@
 # módulo: tls
 # Capa de seguridad en transporte (TLS/SSL)
-# Uso: importar "std/tls"
+# Uso: importar std/tls
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorTLS {
     mensaje: Texto;

@@ -1,7 +1,7 @@
 # módulo: concurrencia
 # Patrones de concurrencia de alto nivel (CSP + async/await)
 #
-# Uso: importar "std/concurrencia"
+# Uso: importar std/concurrencia
 #
 # Proporciona:
 #   - pool_trabajadores(n, procesar)  — pool de workers (clásico)

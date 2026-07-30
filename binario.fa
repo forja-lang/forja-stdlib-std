@@ -1,8 +1,8 @@
 # módulo: binario
 # Empaquetado y desempaquetado binario (endianness, padding)
-# Uso: importar "std/binario"
+# Uso: importar std/binario
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorBinario {
     mensaje: Texto;

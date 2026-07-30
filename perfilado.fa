@@ -1,8 +1,8 @@
 # módulo: perfilado
 # Benchmarks integrados y medición de rendimiento
-# Uso: importar "std/perfilado"
+# Uso: importar std/perfilado
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorPerfilado {
     mensaje: Texto;

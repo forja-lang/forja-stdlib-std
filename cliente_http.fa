@@ -1,7 +1,7 @@
 # modulo: cliente_http
 # Descripcion: Cliente HTTP/1.1 completo para Forja
 #
-# Uso: importar "std/cliente_http"
+# Uso: importar std/cliente_http
 #
 # Nota: Usa funciones nativas _http_* y _socket_*
 

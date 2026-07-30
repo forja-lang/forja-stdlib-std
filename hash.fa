@@ -1,7 +1,7 @@
 # módulo: hash
 # Funciones hash criptográficas y HMAC
 #
-# Uso: importar "std/hash"
+# Uso: importar std/hash
 #
 # Proporciona:
 #   - sha1(datos)                  — SHA-1 (160 bits, 40 hex)

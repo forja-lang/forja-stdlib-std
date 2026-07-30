@@ -1,11 +1,11 @@
 # módulo: ffi
 # Foreign Function Interface para llamar librerías C
-# Uso: importar "std/ffi"
+# Uso: importar std/ffi
 #
 # Las librerías se cargan con: importar externa "ruta.dll"
 # Luego se obtienen funciones y se llaman con este módulo.
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorFFI {
     mensaje: Texto;

@@ -1,8 +1,8 @@
 # módulo: csv
 # Parseo y generación de CSV
-# Uso: importar "std/csv"
+# Uso: importar std/csv
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorCsv {
     mensaje: Texto;

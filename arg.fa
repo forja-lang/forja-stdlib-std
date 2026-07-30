@@ -1,7 +1,7 @@
 # módulo: arg
 # Parser de banderas/argumentos de línea de comandos
 #
-# Uso: importar "std/arg"
+# Uso: importar std/arg
 #
 # Proporciona:
 #   arg.parser(nombre_app, descripcion) -> ArgParser
@@ -11,7 +11,7 @@
 #   parser.flag_posicional(nombre, descripcion)  # argumento sin --
 #   parser.parsear() -> Resultado<ArgResultado, ErrorArg>
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorArg {
     mensaje: Texto

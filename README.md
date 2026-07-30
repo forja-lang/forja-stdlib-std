@@ -5,15 +5,15 @@ Librería estándar de **Forja (fa)** — 45+ módulos para I/O, matemáticas, t
 ## Uso
 
 ```fa
-importar "std/io"
-importar "std/matematica"
-importar "std/texto"
+importar std/io
+importar std/matematica
+importar std/texto
 ```
 
 Cada función se usa directamente tras importar el módulo:
 ```fa
-importar "std/io"
-importar "std/ruta"
+importar std/io
+importar std/ruta
 
 funcion main() {
     imprimir("Archivo: " + ruta.nombre_archivo("/usr/local/bin/forja"))
@@ -119,10 +119,10 @@ funcion main() {
 ## Ejemplo
 
 ```fa
-importar "std/io"
-importar "std/ruta"
-importar "std/env"
-importar "std/perfilado"
+importar std/io
+importar std/ruta
+importar std/env
+importar std/perfilado
 
 funcion main() {
     perfilado.iniciar("main")

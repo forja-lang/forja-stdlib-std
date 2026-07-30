@@ -1,7 +1,7 @@
 # módulo: matematica
 # Descripción: Funciones matemáticas básicas
 # 
-# Uso: importar "std/matematica"
+# Uso: importar std/matematica
 
 # Valor absoluto de un número
 funcion absoluto(x) {

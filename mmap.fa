@@ -1,7 +1,7 @@
 # módulo: mmap
 # Memory-Mapped Files — Mapeo directo de archivos en la memoria virtual del SO
 #
-# Uso: importar "std/mmap"
+# Uso: importar std/mmap
 #
 # Permite leer/escribir archivos mapeándolos directamente en memoria,
 # ideal para I/O de altísimo rendimiento y archivos grandes (>GB).

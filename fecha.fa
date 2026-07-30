@@ -1,7 +1,7 @@
 # módulo: fecha
 # Funciones de fecha y hora
 #
-# Uso: importar "std/fecha"
+# Uso: importar std/fecha
 
 clase ErrorFecha {
     mensaje: Texto

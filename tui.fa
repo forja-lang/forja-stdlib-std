@@ -1,7 +1,7 @@
 # módulo: tui
 # Terminal UI interactiva: raw mode, tamaño terminal, lectura de teclas
 #
-# Uso: importar "std/tui"
+# Uso: importar std/tui
 #
 # Funciones:
 #   tui.raw_mode(activar)           — activa/desactiva modo raw

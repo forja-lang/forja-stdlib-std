@@ -1,7 +1,7 @@
 # módulo: codificacion
 # Codificación y decodificación Base64, URL y Hexadecimal
 #
-# Uso: importar "std/codificacion"
+# Uso: importar std/codificacion
 #
 # Proporciona:
 #   - base64_codificar(texto)              — codifica a Base64

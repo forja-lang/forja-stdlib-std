@@ -1,7 +1,7 @@
 # módulo: temporizador
 # Timers de alta precisión, ejecución diferida, timeouts
 #
-# Uso: importar "std/temporizador"
+# Uso: importar std/temporizador
 #
 # Proporciona:
 #   temporizador.nuevo(duracion_ms) -> Timer
@@ -11,7 +11,7 @@
 #   temporizador.dormir(ms)
 #   temporizador.medir() -> Medicion
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorTemporizador {
     mensaje: Texto; codigo: Entero

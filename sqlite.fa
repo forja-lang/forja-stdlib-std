@@ -1,13 +1,13 @@
 # módulo: sqlite
 # Descripción: Base de datos SQLite — operaciones SQL completas
 #
-# Uso: importar "std/sqlite"
+# Uso: importar std/sqlite
 #
 # ═════════════════════════════════════════════════════════════════════════
 # Ejemplo rápido:
 # ═════════════════════════════════════════════════════════════════════════
 #
-#   importar "std/sqlite"
+#   importar std/sqlite
 #
 #   funcion main() {
 #       variable db = sqlite.abrir(":memory:")

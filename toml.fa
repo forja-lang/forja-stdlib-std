@@ -1,8 +1,8 @@
 # módulo: toml
 # Parseo y generación de TOML
-# Uso: importar "std/toml"
+# Uso: importar std/toml
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorToml {
     mensaje: Texto;

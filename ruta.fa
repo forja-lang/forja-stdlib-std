@@ -1,7 +1,7 @@
 # módulo: ruta
 # Normalización y manipulación de rutas de archivos
 #
-# Uso: importar "std/ruta"
+# Uso: importar std/ruta
 #
 # Proporciona:
 #   ruta.normalizar(ruta) -> Texto
@@ -14,7 +14,7 @@
 #   ruta.es_absoluta(ruta) -> Booleano
 #   ruta.sep() -> Texto
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorRuta {
     mensaje: Texto; codigo: Entero

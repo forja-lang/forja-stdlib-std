@@ -1,7 +1,7 @@
 # módulo: sistema
 # Funciones del sistema operativo y entorno de ejecución
 #
-# Uso: importar "std/sistema"
+# Uso: importar std/sistema
 #
 # Proporciona acceso a:
 #   - Argumentos de línea de comandos
@@ -11,7 +11,7 @@
 #   - Tiempo del sistema (milisegundos)
 #   - Información del SO y versión del lenguaje
 
-importar "std/resultado"
+importar std/resultado
 
 # ═════════════════════════════════════════════════════════════════════════
 # Clase ErrorSistema

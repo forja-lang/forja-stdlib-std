@@ -1,7 +1,7 @@
 # módulo: aleatorio
 # Generación de números aleatorios (xorshift32)
 #
-# Uso: importar "std/aleatorio"
+# Uso: importar std/aleatorio
 #
 # Proporciona:
 #   - semilla(valor)    — establece la semilla del generador

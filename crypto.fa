@@ -1,7 +1,7 @@
 # módulo: crypto
 # Criptografía moderna: cifrado, AEAD, hash de contraseñas, aleatoriedad segura
 #
-# Uso: importar "std/crypto"
+# Uso: importar std/crypto
 #
 # Aleatoriedad:
 #   crypto.bytes_aleatorios(n)           — n bytes aleatorios seguros

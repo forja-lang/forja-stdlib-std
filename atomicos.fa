@@ -1,9 +1,9 @@
 # módulo: atomicos
 # Primitivas atómicas lock-free para concurrencia
 #
-# Uso: importar "std/atomicos"
+# Uso: importar std/atomicos
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorAtomico {
     mensaje: Texto; codigo: Entero

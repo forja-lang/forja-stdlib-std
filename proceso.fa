@@ -1,7 +1,7 @@
 # módulo: proceso
 # Lanzar subprocesos, tuberías, captura de stdout/stderr
 #
-# Uso: importar "std/proceso"
+# Uso: importar std/proceso
 #
 # Proporciona:
 #   proceso.ejecutar(comando) -> Resultado<SalidaProceso, ErrorProceso>
@@ -9,7 +9,7 @@
 #   proceso.ejecutar_en_dir(comando, dir) -> Resultado<SalidaProceso, ErrorProceso>
 #   proceso.esta_ejecutando(pid) -> Booleano
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorProceso {
     mensaje: Texto; codigo: Entero

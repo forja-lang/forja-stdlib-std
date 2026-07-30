@@ -1,7 +1,7 @@
 # módulo: archivo
 # Descripción: Operaciones del sistema de archivos
 #
-# Uso: importar "std/archivo"
+# Uso: importar std/archivo
 #
 # Todas las funciones que pueden fallar retornan Resultado<T, ErrorArchivo>
 # donde ErrorArchivo contiene:

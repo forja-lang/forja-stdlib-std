@@ -1,7 +1,7 @@
 # módulo: json
 # Descripción: Parseo y generación de JSON
 #
-# Uso: importar "std/json"
+# Uso: importar std/json
 #
 # Todas las funciones que pueden fallar retornan Resultado<T, ErrorJSON>
 # donde ErrorJSON contiene:
@@ -52,7 +52,7 @@ funcion serializar(valor) {
 # Lee un archivo JSON y lo parsea.
 # Retorna Error si el archivo no existe o el JSON es inválido.
 funcion leer_json(ruta: Texto) {
-    importar "std/archivo"
+    importar std/archivo
     variable res_archivo = archivo.leer_archivo(ruta)
     coincidir (res_archivo) {
         caso Ok(contenido) -> {
@@ -69,7 +69,7 @@ funcion escribir_json(ruta: Texto, valor) {
     variable res_str = stringificar(valor)
     coincidir (res_str) {
         caso Ok(texto_json) -> {
-            importar "std/archivo"
+            importar std/archivo
             variable res_archivo = archivo.escribir_archivo(ruta, texto_json)
             coincidir (res_archivo) {
                 caso Ok(_) -> {

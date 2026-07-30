@@ -1,7 +1,7 @@
 # modulo: cliente_h2
 # Descripcion: Cliente HTTP/2 (h2c) para Forja
 #
-# Uso: importar "std/cliente_h2"
+# Uso: importar std/cliente_h2
 #
 # Depende de funciones nativas _h2_*, _hpack_*, _socket_*, _base64_*
 # Proporciona:

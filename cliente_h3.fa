@@ -1,9 +1,9 @@
 # modulo: cliente_h3
 # Cliente HTTP/3 (RFC 9114) sobre transporte QUIC para Forja
 #
-# Uso: importar "std/cliente_h3"
+# Uso: importar std/cliente_h3
 
-importar "std/resultado"
+importar std/resultado
 
 # ══════════════════════════════════════════════════════════════════════
 # Clase RespuestaH3

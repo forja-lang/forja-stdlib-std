@@ -1,7 +1,7 @@
 # modulo: servidor_web
 # Descripcion: Servidor HTTP/1.1 completo para Forja
 #
-# Uso: importar "std/servidor_web"
+# Uso: importar std/servidor_web
 #
 # Nota: Este modulo usa funciones nativas _http_* y _socket_*
 #       proporcionadas por la VM de Forja.

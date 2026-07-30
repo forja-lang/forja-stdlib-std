@@ -1,7 +1,7 @@
 # modulo: websocket
 # Descripcion: WebSocket (RFC 6455) para Forja
 #
-# Uso: importar "std/websocket"
+# Uso: importar std/websocket
 #
 # Nota: Usa funciones nativas _ws_* y _socket_*
 

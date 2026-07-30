@@ -1,7 +1,7 @@
 # módulo: ansi
 # Secuencias de escape ANSI para terminal: colores, cursor, pantalla
 #
-# Uso: importar "std/ansi"
+# Uso: importar std/ansi
 #
 # Funciones:
 #   ansi.limpiar_pantalla()    — limpia toda la terminal

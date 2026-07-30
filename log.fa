@@ -1,8 +1,8 @@
 # módulo: log
 # Logging estructurado asíncrono
-# Uso: importar "std/log"
+# Uso: importar std/log
 
-importar "std/resultado"
+importar std/resultado
 
 clase ErrorLog {
     mensaje: Texto;

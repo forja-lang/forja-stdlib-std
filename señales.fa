@@ -1,7 +1,7 @@
 # módulo: señales
 # Manejo de señales POSIX y graceful shutdown
 #
-# Uso: importar "std/señales"
+# Uso: importar std/señales
 #
 # Proporciona:
 #   señales.manejar_sigint(handler)

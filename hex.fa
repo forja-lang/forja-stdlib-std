@@ -1,7 +1,7 @@
 # módulo: hex
 # Descripción: Conversión entre bases numéricas (hexadecimal, decimal, binario, octal)
 #
-# Uso: importar "std/hex"
+# Uso: importar std/hex
 #
 # Funciones de conversión:
 #   hex.a_decimal(hex)             — hexadecimal → entero
