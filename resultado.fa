@@ -24,5 +24,5 @@ funcion Some(valor) -> Opcion<Entero> {
 
 // Representa la ausencia de valor en Opcion
 funcion None() -> Opcion<Entero> {
-    retornar None  // construido por el compilador
+    retornar None()  // construido por el compilador
 }
