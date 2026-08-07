@@ -15,7 +15,7 @@ clase ErrorFecha {
 
 # Obtiene componentes como arreglo: [año, mes, dia, hora, minuto, segundo, nombre_dia, nombre_mes]
 funcion _comp(ts: Entero) {
-    retornar _fecha_desde_timestamp(ts).split("|")
+    retornar _fecha_desde_timestamp(ts).dividir("|")
 }
 
 # Formatea número con ceros a la izquierda
@@ -29,24 +29,24 @@ funcion _fmt(valor, digitos: Entero) -> Texto {
 
 funcion ahora() -> Texto {
     variable ts = tiempo_actual()
-    variable c = _fecha_desde_timestamp(ts).split("|")
+    variable c = _fecha_desde_timestamp(ts).dividir("|")
     retornar _fmt(c[0],4) + "-" + _fmt(c[1],2) + "-" + _fmt(c[2],2) + " " + _fmt(c[3],2) + ":" + _fmt(c[4],2) + ":" + _fmt(c[5],2)
 }
 
 funcion hoy() -> Texto {
     variable ts = tiempo_actual()
-    variable c = _fecha_desde_timestamp(ts).split("|")
+    variable c = _fecha_desde_timestamp(ts).dividir("|")
     retornar _fmt(c[0],4) + "-" + _fmt(c[1],2) + "-" + _fmt(c[2],2)
 }
 
 funcion hora_actual() -> Texto {
     variable ts = tiempo_actual()
-    variable c = _fecha_desde_timestamp(ts).split("|")
+    variable c = _fecha_desde_timestamp(ts).dividir("|")
     retornar _fmt(c[3],2) + ":" + _fmt(c[4],2) + ":" + _fmt(c[5],2)
 }
 
 funcion formatear(ts: Entero, formato: Texto) -> Texto {
-    variable c = _fecha_desde_timestamp(ts).split("|")
+    variable c = _fecha_desde_timestamp(ts).dividir("|")
     variable res = ""
     variable i = 0
     variable n = longitud(formato)
@@ -109,11 +109,11 @@ funcion parsear(texto: Texto, formato: Texto) -> Resultado<Entero, ErrorFecha> {
 }
 
 funcion formato_largo(ts: Entero) -> Texto {
-    variable c = _fecha_desde_timestamp(ts).split("|")
+    variable c = _fecha_desde_timestamp(ts).dividir("|")
     retornar a_texto(c[2]) + " de " + c[7] + " de " + a_texto(c[0])
 }
 
 funcion formato_corto(ts: Entero) -> Texto {
-    variable c = _fecha_desde_timestamp(ts).split("|")
+    variable c = _fecha_desde_timestamp(ts).dividir("|")
     retornar _fmt(c[2],2) + "/" + _fmt(c[1],2) + "/" + _fmt(c[0],4)
 }

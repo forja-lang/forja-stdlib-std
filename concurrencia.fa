@@ -85,10 +85,20 @@ funcion mapa_paralelo(arr, num_workers: Entero, callback) {
 #
 funcion con_limite_tiempo(ms: Entero, callback) {
     variable t_inicio = tiempo_actual()
+    variable limite = ms / 1000
+
+    # Verificar si el tiempo ya excedió el límite antes de ejecutar
+    variable t_actual = tiempo_actual()
+    si (t_actual - t_inicio > limite) {
+        retornar Error("Tiempo agotado")
+    }
+
+    # Ejecutar el callback
     variable res = callback()
+
+    # Verificar después de ejecutar
     variable t_fin = tiempo_actual()
     variable t_total = t_fin - t_inicio
-    variable limite = ms / 1000
 
     si (t_total <= limite) {
         retornar Ok(res)

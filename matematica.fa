@@ -78,7 +78,7 @@ funcion redondear(x) {
 funcion suma_array(arr) {
     variable suma = 0
     variable i = 0
-    variable largo = arr.length()
+    variable largo = arr.longitud()
     mientras (i < largo) {
         suma = suma + arr[i]
         i = i + 1
@@ -89,7 +89,7 @@ funcion suma_array(arr) {
 # Calcula el promedio de los elementos de un array
 funcion promedio(arr) {
     variable suma = suma_array(arr)
-    variable largo = arr.length()
+    variable largo = arr.longitud()
     si (largo == 0) {
         retornar 0
     }
@@ -133,8 +133,8 @@ funcion exacto_desde_decimal(d: Decimal) -> Exacto {
 # Ejemplo: exacto_desde_texto("123.456") -> 123.456
 funcion exacto_desde_texto(t: Texto) -> Exacto {
     # Dividir por el punto decimal
-    variable partes = t.split(".")
-    variable largo = partes.length()
+    variable partes = t.dividir(".")
+    variable largo = partes.longitud()
     
     # Si no hay punto, convertir entero directamente
     si (largo == 1) {
@@ -155,7 +155,7 @@ funcion exacto_desde_texto(t: Texto) -> Exacto {
     }
     
     # Calcular 10^len_fraccion
-    variable len_fraccion = parte_fraccion_str.length()
+    variable len_fraccion = parte_fraccion_str.longitud()
     variable divisor = 1
     variable i = 0
     mientras (i < len_fraccion) {

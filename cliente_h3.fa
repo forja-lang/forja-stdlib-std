@@ -54,10 +54,31 @@ funcion h3_enviar(url: Texto, cuerpo: Texto) -> Resultado<RespuestaH3, Texto> {
 #
 # Retorna: Ok(RespuestaH3) o Error(mensaje)
 funcion h3_solicitud(metodo: Texto, url: Texto, cabeceras: Mapa, cuerpo: Texto) -> Resultado<RespuestaH3, Texto> {
-    # Extraer host y puerto por defecto (443)
-    variable host = "127.0.0.1"
+    # Extraer host, puerto y ruta de la URL
+    variable host = ""
     variable puerto = 443
     variable ruta = "/"
+
+    # Parsear la URL: soporta http://host:puerto/ruta y https://...
+    variable url_limpia = url
+    si (url_limpia.contiene("://")) {
+        variable partes_protocolo = url_limpia.dividir("://")
+        url_limpia = partes_protocolo[1]
+    }
+    si (url_limpia.contiene("/")) {
+        variable partes_host_ruta = url_limpia.dividir("/")
+        host = partes_host_ruta[0]
+        si (longitud(partes_host_ruta) > 1) {
+            ruta = "/" + partes_host_ruta[1]
+        }
+    } sino {
+        host = url_limpia
+    }
+    si (host.contiene(":")) {
+        variable partes_host_puerto = host.dividir(":")
+        host = partes_host_puerto[0]
+        puerto = a_entero(partes_host_puerto[1])
+    }
 
     variable resp_map = _h3_solicitud(host, puerto, metodo, ruta, "", cuerpo)
     variable resp = nuevo RespuestaH3()

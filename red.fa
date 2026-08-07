@@ -62,15 +62,32 @@ funcion validar_ipv4(ip: Texto) -> Booleano {
     si (longitud(ip) == 0) {
         retornar falso
     }
+    variable partes = ip.dividir(".")
+    si (longitud(partes) != 4) {
+        retornar falso
+    }
     variable i = 0
-    variable encontrado = falso
-    mientras (i < longitud(ip)) {
-        si (subcadena(ip, i, 1) == ".") {
-            encontrado = verdadero
+    mientras (i < 4) {
+        variable parte = partes[i]
+        si (longitud(parte) == 0 || longitud(parte) > 3) {
+            retornar falso
+        }
+        # Verificar que cada carácter sea dígito
+        variable j = 0
+        mientras (j < longitud(parte)) {
+            variable c = a_codigo(subcadena(parte, j, 1))
+            si (c < 48 || c > 57) { # '0'=48, '9'=57
+                retornar falso
+            }
+            j = j + 1
+        }
+        variable num = a_entero(parte)
+        si (num < 0 || num > 255) {
+            retornar falso
         }
         i = i + 1
     }
-    retornar encontrado
+    retornar verdadero
 }
 
 # Valida si un texto es una dirección IPv6 válida (ej: "::1" o "fe80::1")
@@ -78,32 +95,63 @@ funcion validar_ipv6(ip: Texto) -> Booleano {
     si (longitud(ip) == 0) {
         retornar falso
     }
+    variable partes = ip.dividir(":")
+    si (longitud(partes) > 8) {
+        retornar falso
+    }
     variable i = 0
-    variable encontrado = falso
-    mientras (i < longitud(ip)) {
-        si (subcadena(ip, i, 1) == ":") {
-            encontrado = verdadero
+    mientras (i < longitud(partes)) {
+        variable parte = partes[i]
+        si (longitud(parte) > 4) {
+            retornar falso
+        }
+        # Verificar que cada carácter sea hex
+        variable j = 0
+        mientras (j < longitud(parte)) {
+            variable c = a_codigo(subcadena(parte, j, 1))
+            si (c < 48 || (c > 57 && c < 65) || (c > 70 && c < 97) || c > 102) {
+                # no es dígito (0-9), A-F, ni a-f
+                retornar falso
+            }
+            j = j + 1
         }
         i = i + 1
     }
-    retornar encontrado
+    retornar verdadero
 }
 
 # Valida si un texto es una dirección MAC (ej: "00:1A:2B:3C:4D:5E")
 funcion validar_mac(mac: Texto) -> Booleano {
-    si (longitud(mac) < 11) {
+    # Formato: XX:XX:XX:XX:XX:XX o XX-XX-XX-XX-XX-XX (17 caracteres)
+    si (longitud(mac) != 17) {
         retornar falso
     }
     variable i = 0
-    variable encontrado = falso
-    mientras (i < longitud(mac)) {
-        variable c = subcadena(mac, i, 1)
-        si (c == ":" || c == "-") {
-            encontrado = verdadero
-        }
-        i = i + 1
+    variable separador = ""
+    # Detectar separador (: o -)
+    si (subcadena(mac, 2, 1) == ":") {
+        separador = ":"
+    } sino si (subcadena(mac, 2, 1) == "-") {
+        separador = "-"
+    } sino {
+        retornar falso
     }
-    retornar encontrado
+    # Verificar patrón XX<sep>XX<sep>...
+    variable pos = 0
+    mientras (pos < 17) {
+        si (pos == 2 || pos == 5 || pos == 8 || pos == 11 || pos == 14) {
+            si (subcadena(mac, pos, 1) != separador) {
+                retornar falso
+            }
+        } sino {
+            variable c = a_codigo(subcadena(mac, pos, 1))
+            si (c < 48 || (c > 57 && c < 65) || (c > 70 && c < 97) || c > 102) {
+                retornar falso
+            }
+        }
+        pos = pos + 1
+    }
+    retornar verdadero
 }
 
 # ══════════════════════════════════════════════════════════════════════
