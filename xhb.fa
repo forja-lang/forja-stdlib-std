@@ -1,0 +1,205 @@
+# módulo: xhb
+# Descripción: Parseo y serialización de archivos HomeBank XHB (Finanzas Personales XML)
+#
+# Uso: importar std/xhb
+#
+# Proporciona soporte completo para leer, modificar y guardar archivos .xhb
+# de HomeBank con fidelidad 100% byte por byte.
+
+# ═════════════════════════════════════════════════════════════════════════
+# Clase ErrorXHB
+# ═════════════════════════════════════════════════════════════════════════
+
+clase ErrorXHB {
+    mensaje: Texto
+    codigo: Entero
+
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Clases Entidad XHB
+# ═════════════════════════════════════════════════════════════════════════
+
+clase MonedaXHB {
+    key: Entero
+    iso: Texto
+    nombre: Texto
+    simbolo: Texto
+    banderas: Entero
+    simbolo_prefijo: Entero
+    decimal_char: Texto
+    grupo_char: Texto
+    fraccion: Entero
+    tasa: Decimal
+    mdate: Entero
+
+    constructor(key: Entero, iso: Texto, nombre: Texto, simbolo: Texto) {
+        este.key = key
+        este.iso = iso
+        este.nombre = nombre
+        este.simbolo = simbolo
+        este.banderas = 0
+        este.simbolo_prefijo = 1
+        este.decimal_char = "."
+        este.grupo_char = ","
+        este.fraccion = 2
+        este.tasa = 0.0
+        este.mdate = 0
+    }
+}
+
+clase CuentaXHB {
+    key: Entero
+    posicion: Entero
+    tipo: Entero
+    moneda_key: Entero
+    nombre: Texto
+    numero: Texto
+    banco: Texto
+    saldo_inicial: Decimal
+    saldo_minimo: Decimal
+    cheque1: Texto
+    cheque2: Texto
+
+    constructor(key: Entero, nombre: Texto, tipo: Entero, moneda_key: Entero) {
+        este.key = key
+        este.nombre = nombre
+        este.tipo = tipo
+        este.moneda_key = moneda_key
+        este.posicion = 1
+        este.numero = ""
+        este.banco = ""
+        este.saldo_inicial = 0.0
+        este.saldo_minimo = 0.0
+        este.cheque1 = ""
+        este.cheque2 = ""
+    }
+}
+
+clase BeneficiarioXHB {
+    key: Entero
+    nombre: Texto
+    categoria_key: Entero
+    modo_pago: Entero
+    notas: Texto
+
+    constructor(key: Entero, nombre: Texto) {
+        este.key = key
+        este.nombre = nombre
+        este.categoria_key = 0
+        este.modo_pago = 0
+        este.notas = ""
+    }
+}
+
+clase CategoriaXHB {
+    key: Entero
+    padre_key: Entero
+    banderas: Entero
+    nombre: Texto
+
+    constructor(key: Entero, nombre: Texto, banderas: Entero) {
+        este.key = key
+        este.nombre = nombre
+        este.banderas = banderas
+        este.padre_key = 0
+    }
+}
+
+clase EtiquetaXHB {
+    key: Entero
+    nombre: Texto
+
+    constructor(key: Entero, nombre: Texto) {
+        este.key = key
+        este.nombre = nombre
+    }
+}
+
+clase OperacionXHB {
+    fecha: Entero
+    monto: Decimal
+    cuenta_key: Entero
+    cuenta_destino_key: Entero
+    modo_pago: Entero
+    beneficiario_key: Entero
+    categoria_key: Entero
+    concepto: Texto
+    etiquetas: Texto
+    banderas: Entero
+    estado: Entero
+    kmo: Entero
+
+    constructor(fecha: Entero, monto: Decimal, cuenta_key: Entero, concepto: Texto) {
+        este.fecha = fecha
+        este.monto = monto
+        este.cuenta_key = cuenta_key
+        este.cuenta_destino_key = 0
+        este.modo_pago = 0
+        este.beneficiario_key = 0
+        este.categoria_key = 0
+        este.concepto = concepto
+        este.etiquetas = ""
+        este.banderas = 0
+        este.estado = 0
+        este.kmo = 0
+    }
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Operaciones XHB
+# ═════════════════════════════════════════════════════════════════════════
+
+# Parsea un texto XML formato HomeBank XHB y retorna una estructura de datos.
+funcion parsear(xml: Texto) {
+    si (xml == nulo) {
+        retornar Error(nuevo ErrorXHB("Se esperaba una cadena XML XHB no vacía", 1))
+    }
+    variable res = _xhb_parsear(xml)
+    retornar Ok(res)
+}
+
+# Serializa una estructura de datos XHB a texto XML HomeBank con fidelidad byte a byte.
+funcion serializar(datos) {
+    si (datos == nulo) {
+        retornar Error(nuevo ErrorXHB("Estructura XHB inválida para serializar", 2))
+    }
+    variable res = _xhb_serializar(datos)
+    retornar Ok(res)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# Conveniencia de Archivos XHB
+# ═════════════════════════════════════════════════════════════════════════
+
+# Lee un archivo .xhb y lo parsea a un objeto XHB.
+funcion leer_xhb(ruta: Texto) {
+    importar std/archivo
+    variable res_archivo = archivo.leer_archivo(ruta)
+    coincidir (res_archivo) {
+        caso Ok(contenido) -> {
+            retornar parsear(contenido)
+        }
+        caso Error(err) -> {
+            retornar Error(nuevo ErrorXHB("No se pudo leer el archivo XHB", 3))
+        }
+    }
+}
+
+# Serializa y guarda un objeto XHB en un archivo .xhb.
+funcion guardar_xhb(ruta: Texto, datos) {
+    importar std/archivo
+    variable res_xml = serializar(datos)
+    coincidir (res_xml) {
+        caso Ok(xml_texto) -> {
+            retornar archivo.escribir_archivo(ruta, xml_texto)
+        }
+        caso Error(err) -> {
+            retornar Error(err)
+        }
+    }
+}
