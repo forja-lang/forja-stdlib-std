@@ -18,11 +18,20 @@ funcion Error(mensaje) -> Resultado<Entero, Texto> {
 }
 
 // Construye un Opcion Some con el valor dado
-funcion Some(valor) -> Opcion<Entero> {
-    retornar Some(valor)  // construido por el compilador
+funcion Algo(valor) -> Opcion<Entero> {
+    retornar Algo(valor)  // construido por el compilador
+}
+
+funcion Alguno(valor) -> Opcion<Entero> {
+    retornar Alguno(valor)  // construido por el compilador
 }
 
 // Representa la ausencia de valor en Opcion
-funcion None() -> Opcion<Entero> {
-    retornar None()  // construido por el compilador
+funcion Ninguno() -> Opcion<Entero> {
+    retornar Ninguno()  // construido por el compilador
+}
+
+// Representa la ausencia de valor en Opcion
+funcion Nada() -> Opcion<Entero> {
+    retornar Nada()  // construido por el compilador
 }

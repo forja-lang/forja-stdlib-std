@@ -43,7 +43,7 @@ funcion escribir_archivo(ruta: Texto, contenido: Texto) {
     retornar Ok(nulo)
 }
 
-funcion existe_archivo(ruta: Texto) -> Booleano {
+funcion existe_archivo(ruta: Texto) {
     retornar _archivo_existe(ruta)
 }
 
@@ -137,7 +137,7 @@ funcion info_archivo(ruta: Texto) {
     retornar Ok(info)
 }
 
-funcion es_directorio(ruta: Texto) -> Booleano {
+funcion es_directorio(ruta: Texto) {
     variable res = _archivo_info(ruta)
     si (res == -1) {
         retornar falso

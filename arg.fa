@@ -66,7 +66,7 @@ clase ArgResultado {
     funcion entero(self, nombre: Texto, por_defecto: Entero) -> Entero {
         variable val = _arg_flag_texto(self.parser, nombre)
         coincidir (val) {
-            caso Some(v) -> {
+            caso Algo(v) -> {
                 variable n = _arg_parsear_entero(v)
                 si (n == "") { retornar por_defecto }
                 retornar n

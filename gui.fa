@@ -1,0 +1,228 @@
+# Módulo: gui / std/gui
+# Descripción: Biblioteca estándar de interfaz gráfica nativa (Forja GUI + Xilem)
+# Uso: 
+#   importar gui
+#   # o
+#   importar std/gui
+
+# ─── Layouts y Contenedores ───
+
+/// Contenedor vertical (Flex Column)
+funcion columna(hijos...) {
+    # Renderiza sus hijos verticalmente
+}
+
+/// Contenedor vertical centrado
+funcion columna_centrada(hijos...) {
+    # Renderiza sus hijos centrados verticalmente
+}
+
+/// Contenedor vertical con espaciado uniforme
+funcion columna_con_gap(gap: Decimal, hijos: Array) {
+    # Renderiza una columna con espaciado especificado
+}
+
+/// Contenedor horizontal (Flex Row)
+funcion fila(hijos...) {
+    # Renderiza sus hijos horizontalmente
+}
+
+/// Contenedor horizontal con espaciado y alineación
+funcion fila_con_gap(gap: Decimal, alineacion: Texto, hijos: Array) {
+    # Renderiza una fila con espaciado y alineación
+}
+
+/// Apilamiento superpuesto (ZStack)
+funcion pila(hijos...) {
+    # Renderiza elementos superpuestos en eje Z
+}
+
+/// Panel con scroll desplazable
+funcion desplazable(hijo) {
+    # Contenedor desplazable vertical u horizontalmente
+}
+
+/// Panel contenedor con ancho máximo
+funcion contenedor(hijo, ancho_max: Decimal) {
+    # Restringe el ancho máximo del contenido
+}
+
+/// Espaciador fijo
+funcion espacio(altura: Decimal) {
+    # Crea un espacio vacío con la altura/ancho indicados
+}
+
+/// Espaciador expansible (Spacer / Flexible)
+funcion expansor(hijo) {
+    # Empuja los demás elementos ocupando el espacio disponible
+}
+
+/// Elemento centrado en eje transversal
+funcion centrado(hijo) {
+    # Centra el elemento hijo
+}
+
+/// Relleno de margenes internos (Padding)
+funcion relleno(padding: Decimal, hijo) {
+    # Añade padding uniforme alrededor del hijo
+}
+
+/// Contenedor adaptativo según resolución (Responsive Layout)
+/// compact (<600px), medium (600-840px), expanded (>840px)
+funcion adaptable(compacto, mediano, expandido) {
+    # Selecciona el layout automáticamente según el ancho de pantalla
+}
+
+/// Disposición fluida envuelta (Flow Layout)
+funcion flujo(gap: Decimal, hijos: Array) {
+    # Renderiza los elementos en flujo continuo envolviendo líneas
+}
+
+# ─── Widgets de Texto ───
+
+/// Etiqueta de texto estático
+funcion etiqueta(texto: Texto) {
+    # Muestra texto fijo
+}
+
+/// Etiqueta conectada a una variable reactiva
+funcion etiqueta_dinamica(var_nombre: Texto) {
+    # Actualiza su texto automáticamente al cambiar la variable
+}
+
+/// Título destacado
+funcion etiqueta_titulo(texto: Texto) {
+    # Texto de título grande
+}
+
+/// Texto con color personalizado
+funcion etiqueta_color(texto: Texto, color: Texto) {
+    # Texto coloreado (ej: "primary", "secondary", "#FF0000")
+}
+
+/// Texto enriquecido compatible con Markdown
+funcion texto_enriquecido(markdown: Texto) {
+    # Renderiza formato Markdown (negrita, cursiva, listas, links)
+}
+
+# ─── Controles de Entrada (Inputs) ───
+
+/// Campo de texto de una sola línea vinculado a una variable
+funcion entrada_texto(var_nombre: Texto, placeholder: Texto) {
+    # Campo para ingresar texto breve
+}
+
+/// Área de texto multilínea vinculada a una variable
+funcion area_texto(var_nombre: Texto, placeholder: Texto) {
+    # Campo para textos largos o notas
+}
+
+/// Deslizante numérico (Slider)
+funcion deslizante(var_nombre: Texto, min: Decimal, max: Decimal) {
+    # Selector deslizante entre min y max
+}
+
+/// Casilla de verificación (Checkbox)
+funcion casilla(etiqueta_texto: Texto, var_nombre: Texto) {
+    # Interruptor booleano con etiqueta opcional
+}
+
+# ─── Botones Material Design 3 ───
+
+/// Botón con texto y callback al hacer clic
+funcion boton(texto: Texto, callback) {
+    # Botón principal ejecutable
+}
+
+/// Botón relleno primario (Filled Button)
+funcion boton_relleno(texto: Texto, callback) {
+    # Botón con color de fondo primario
+}
+
+/// Botón delineado (Outlined Button)
+funcion boton_delineado(texto: Texto, callback) {
+    # Botón con borde visible y fondo transparente
+}
+
+/// Botón de texto plano (Text Button)
+funcion boton_texto(texto: Texto, callback) {
+    # Botón sin borde ni elevación
+}
+
+/// Botón elevado con sombra (Elevated Button)
+funcion boton_elevado(texto: Texto, callback) {
+    # Botón elevado con elevación tonal
+}
+
+/// Botón tonal (Tonal Button)
+funcion boton_tonal(texto: Texto, callback) {
+    # Botón con tono secundario
+}
+
+# ─── Indicadores y Feedback ───
+
+/// Barra de progreso lineal vinculada a variable (0.0 a 1.0)
+funcion barra_progreso(var_nombre: Texto) {
+    # Muestra el avance de una tarea
+}
+
+/// Indicador circular de carga (Spinner)
+funcion cargando() {
+    # Muestra un spinner indeterminado
+}
+
+/// Divisor horizontal (Separador)
+funcion separador() {
+    # Línea horizontal divisoria
+}
+
+# ─── Iconos Material Design ───
+
+/// Icono Material por nombre ("home", "settings", "search", etc.)
+funcion icono_material(nombre: Texto, tamano: Decimal, color: Texto) {
+    # Renderiza un icono vectorial Material
+}
+
+/// Icono de relleno sólido (Filled)
+funcion icono_relleno(nombre: Texto, tamano: Decimal) {
+    # Icono relleno
+}
+
+/// Icono delineado (Outlined)
+funcion icono_perfilado(nombre: Texto, tamano: Decimal) {
+    # Icono perfilado
+}
+
+# ─── Gráficos y Visualización de Datos ───
+
+/// Gráfico de líneas
+funcion grafico_lineas(datos: Array, etiquetas: Array, color: Texto) {
+    # Muestra gráfico de líneas
+}
+
+/// Gráfico de barras
+funcion grafico_barras(datos: Array, etiquetas: Array, colores: Array) {
+    # Muestra gráfico de barras
+}
+
+/// Gráfico circular / pastel
+funcion grafico_pastel(datos: Array, etiquetas: Array) {
+    # Muestra gráfico circular
+}
+
+/// Minigráfico de tendencia (Sparkline)
+funcion minigrafico(datos: Array, color: Texto) {
+    # Gráfico compacto de tendencia sin ejes
+}
+
+# ─── Pickers y Diálogos ───
+
+/// Selector de archivo nativo
+funcion selector_archivo(extensiones: Array, callback) {
+    # Abre diálogo del sistema para seleccionar archivos
+}
+
+/// Visor de Código QR
+funcion visor_qr(texto_contenido: Texto, tamano: Decimal) {
+    # Genera y renderiza un código QR
+}
