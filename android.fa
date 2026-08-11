@@ -1,0 +1,171 @@
+# Módulo: android
+# Biblioteca estándar de interacción nativa con el sistema operativo Android
+#
+# Uso: importar "android"
+
+# ═════════════════════════════════════════════════════════════════════════
+# 1. UI & Feedback Háptico
+# ═════════════════════════════════════════════════════════════════════════
+
+# Muestra un mensaje emergente nativo (Toast) en la pantalla
+funcion toast(mensaje: Texto, largo: Booleano = falso) {
+    _android_toast(mensaje, largo)
+}
+
+# Hace vibrar el dispositivo durante la cantidad de milisegundos especificada
+funcion vibrar(ms: Entero) {
+    _android_vibrar(ms)
+}
+
+# Dispara un efecto háptico del sistema ("clic", "doble_clic", "seleccion", "error", "exito")
+funcion efecto_haptico(tipo: Texto) {
+    _android_efecto_haptico(tipo)
+}
+
+# Mantiene o libera la pantalla encendida (FLAG_KEEP_SCREEN_ON)
+funcion pantalla_encendida(mantener: Booleano) {
+    _android_pantalla_encendida(mantener)
+}
+
+# Bloquea o ajusta la orientación de la pantalla ("vertical", "horizontal", "auto")
+funcion pantalla_orientacion(modo: Texto) {
+    _android_pantalla_orientacion(modo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 2. Notificaciones del Sistema
+# ═════════════════════════════════════════════════════════════════════════
+
+# Crea un canal de notificación (requerido en Android 8.0+)
+funcion notificacion_canal_crear(id: Texto, nombre: Texto, importancia: Texto = "alta") {
+    _android_notificacion_canal_crear(id, nombre, importancia)
+}
+
+# Envía una notificación a la barra de estado del sistema
+funcion notificacion(id: Entero, canal_id: Texto, titulo: Texto, mensaje: Texto) {
+    _android_notificacion(id, canal_id, titulo, mensaje)
+}
+
+# Cancela una notificación activa por su ID
+funcion notificacion_cancelar(id: Entero) {
+    _android_notificacion_cancelar(id)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 3. Almacenamiento & Cifrado en KeyStore
+# ═════════════════════════════════════════════════════════════════════════
+
+# Guarda una preferencia clave-valor persistente
+funcion almacenamiento_guardar(clave: Texto, valor: Texto) {
+    _android_almacenamiento_guardar(clave, valor)
+}
+
+# Lee una preferencia guardada (retorna 'defecto' si la clave no existe)
+funcion almacenamiento_leer(clave: Texto, defecto: Texto = "") -> Texto {
+    retornar _android_almacenamiento_leer(clave, defecto)
+}
+
+# Elimina una clave del almacenamiento persistente
+funcion almacenamiento_eliminar(clave: Texto) {
+    _android_almacenamiento_eliminar(clave)
+}
+
+# Cifra y guarda un secreto usando AES-256 respaldado por el Android KeyStore nativo
+funcion guardar_seguro(clave: Texto, secreto: Texto) {
+    _android_guardar_seguro(clave, secreto)
+}
+
+# Lee y desencripta un secreto almacenado mediante el Android KeyStore
+funcion leer_seguro(clave: Texto) -> Texto {
+    retornar _android_leer_seguro(clave)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 4. Ubicación GPS
+# ═════════════════════════════════════════════════════════════════════════
+
+# Retorna las coordenadas GPS actuales: [latitud, longitud, altitud, precision]
+funcion ubicacion_actual() -> Arreglo<Decimal> {
+    retornar _android_ubicacion_actual()
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 5. Hardware, Batería y Sensores
+# ═════════════════════════════════════════════════════════════════════════
+
+# Retorna el porcentaje actual de batería (0-100)
+funcion bateria_nivel() -> Entero {
+    retornar _android_bateria_nivel()
+}
+
+# Retorna verdadero si el dispositivo está conectado a un cargador
+funcion bateria_cargando() -> Booleano {
+    retornar _android_bateria_cargando()
+}
+
+# Retorna los valores del acelerómetro 3D: [x, y, z]
+funcion sensor_acelerometro() -> Arreglo<Decimal> {
+    retornar _android_sensor_acelerometro()
+}
+
+# Retorna los valores del giroscopio 3D: [x, y, z]
+funcion sensor_giroscopio() -> Arreglo<Decimal> {
+    retornar _android_sensor_giroscopio()
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 6. Cámara & Multimedia
+# ═════════════════════════════════════════════════════════════════════════
+
+# Abre la cámara del sistema para tomar una foto y devuelve la ruta del archivo
+funcion camara_tomar_foto() -> Texto {
+    retornar _android_camara_tomar_foto()
+}
+
+# Abre el escáner de código QR nativo y retorna el texto decodificado
+funcion camara_escanear_qr() -> Texto {
+    retornar _android_camara_escanear_qr()
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 7. Permisos & Autenticación Biométrica
+# ═════════════════════════════════════════════════════════════════════════
+
+# Verifica si la app tiene un permiso runtime ("camara", "ubicacion", "notificaciones")
+funcion permiso_verificar(permiso: Texto) -> Booleano {
+    retornar _android_permiso_verificar(permiso)
+}
+
+# Solicita interactivamente un permiso al usuario
+funcion permiso_solicitar(permiso: Texto) {
+    _android_permiso_solicitar(permiso)
+}
+
+# Abre la autenticación biométrica (Huella / Rostro). Retorna verdadero si fue exitoso
+funcion biometria_autenticar(titulo: Texto = "Autenticación Biométrica") -> Booleano {
+    retornar _android_biometria_autenticar(titulo)
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# 8. Intents del Sistema, URLs y Portapapeles
+# ═════════════════════════════════════════════════════════════════════════
+
+# Abre el menú nativo de compartir texto (WhatsApp, Email, etc.)
+funcion compartir_texto(texto: Texto) {
+    _android_compartir_texto(texto)
+}
+
+# Abre una URL en el navegador predeterminado del dispositivo
+funcion abrir_url(url: Texto) {
+    _android_abrir_url(url)
+}
+
+# Copia un texto al portapapeles del sistema
+funcion clipboard_copiar(texto: Texto) {
+    _android_clipboard_copiar(texto)
+}
+
+# Lee el contenido del portapapeles del sistema
+funcion clipboard_pegar() -> Texto {
+    retornar _android_clipboard_pegar()
+}
