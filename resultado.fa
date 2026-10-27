@@ -1,37 +1,46 @@
-// Tipo Resultado<T, E> con variantes Ok y Error
-// Tipo Opcion<T> con variantes Some y None
+// Tipos algebraicos del prelude de Forja
+// ======================================
 //
-// Estos tipos son predefinidos del lenguaje (built-in).
-// El compilador los reconoce directamente y los mapea a Result<T,E> y Option<T> de Rust.
+// El compilador define, sin necesidad de importar nada:
 //
-// Esta biblioteca es documentación/referencia de la sintaxis.
-// Las funciones constructoras están disponibles globalmente.
+//   Resultado<T, E> = Ok(T) | Error(E)
+//   Opcion<T>       = Alguno(T) | Ninguno
+//
+// Constructores disponibles globalmente: `Ok`, `Error`, `Algo`/`Alguno`,
+// `Ninguno`/`Nada`.
+//
+// El operador `?` desenvuelve un `Ok`/`Alguno` o propaga el `Error`/`Ninguno`
+// al llamador, y sólo puede usarse dentro de una función cuyo tipo de retorno
+// sea `Resultado` u `Opcion`.
+//
+// Este módulo aporta helpers para inspeccionar esos valores sin escribir un
+// `coincidir` explícito. El parámetro de entrada es genérico (puede ser
+// `Resultado` u `Opcion`), por eso el patrón comodín cubre el resto.
 
-// Construye un Resultado Ok con el valor dado
-funcion Ok(valor) -> Resultado<Entero, Texto> {
-    retornar Ok(valor)  // construido por el compilador
+// ¿El valor es un éxito (`Ok`/`Alguno`)?
+funcion es_ok(valor) -> Booleano {
+    coincidir (valor) {
+        caso Ok(_) -> { retornar verdadero }
+        caso Alguno(_) -> { retornar verdadero }
+        caso _ -> { retornar falso }
+    }
 }
 
-// Construye un Resultado Error con el mensaje dado
-funcion Error(mensaje) -> Resultado<Entero, Texto> {
-    retornar Error(mensaje)  // construido por el compilador
+// ¿El valor es un error o una ausencia (`Error`/`Ninguno`)?
+funcion es_error(valor) -> Booleano {
+    retornar no es_ok(valor)
 }
 
-// Construye un Opcion Some con el valor dado
-funcion Algo(valor) -> Opcion<Entero> {
-    retornar Algo(valor)  // construido por el compilador
+// Devuelve el contenido, o `por_defecto` si no hay valor.
+funcion desenvolver_o(valor, por_defecto) {
+    coincidir (valor) {
+        caso Ok(v) -> { retornar v }
+        caso Alguno(v) -> { retornar v }
+        caso _ -> { retornar por_defecto }
+    }
 }
 
-funcion Alguno(valor) -> Opcion<Entero> {
-    retornar Alguno(valor)  // construido por el compilador
-}
-
-// Representa la ausencia de valor en Opcion
-funcion Ninguno() -> Opcion<Entero> {
-    retornar Ninguno()  // construido por el compilador
-}
-
-// Representa la ausencia de valor en Opcion
-funcion Nada() -> Opcion<Entero> {
-    retornar Nada()  // construido por el compilador
+// Devuelve el contenido, o `nulo` si no hay valor.
+funcion desenvolver(valor) {
+    retornar desenvolver_o(valor, nulo)
 }
