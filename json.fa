@@ -28,7 +28,7 @@ clase ErrorJSON {
 
 # Parsea un texto JSON y retorna el valor Forja correspondiente.
 # El resultado puede ser un Arreglo, Mapa, Texto, Entero, Decimal, Booleano o Nulo.
-funcion parsear(texto: Texto) {
+funcion parsear(texto: Texto) -> Resultado<Texto, ErrorJSON> {
     variable res = _json_parsear(texto)
     si (res[0] != 0) {
         retornar Error(nuevo ErrorJSON(res[1], res[0]))
@@ -37,7 +37,7 @@ funcion parsear(texto: Texto) {
 }
 
 # Convierte un valor Forja a texto JSON.
-funcion serializar(valor) {
+funcion serializar(valor) -> Resultado<Texto, ErrorJSON> {
     variable res = _json_stringificar(valor)
     si (res[0] != 0) {
         retornar Error(nuevo ErrorJSON(res[1], res[0]))
