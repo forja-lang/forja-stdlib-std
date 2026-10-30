@@ -14,6 +14,13 @@
 clase ErrorHash {
     mensaje: Texto
     codigo: Entero
+
+    // Sin constructor, `nuevo ErrorHash(msg, codigo)` no sabía a qué asignar
+    // los argumentos y el runtime fallaba con "función no definida".
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
 }
 
 # Calcula SHA-1 de un texto, retorna hash hexadecimal (40 caracteres en minúscula)
