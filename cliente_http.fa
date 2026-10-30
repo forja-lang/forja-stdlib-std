@@ -100,14 +100,14 @@ funcion _resolver_url(url: Texto) {
         }
     }
 
-    variable pos_barra = buscar(resto, "/")
+    variable pos_barra = indice_de(resto, "/")
     variable host_parte = resto
     si (pos_barra >= 0) {
         host_parte = resto[..pos_barra]
         ruta = resto[pos_barra..]
     }
 
-    variable pos_dos_puntos = buscar(host_parte, ":")
+    variable pos_dos_puntos = indice_de(host_parte, ":")
     si (pos_dos_puntos >= 0) {
         host = host_parte[..pos_dos_puntos]
         puerto = a_entero(host_parte[pos_dos_puntos + 1..])

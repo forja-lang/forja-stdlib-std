@@ -66,7 +66,7 @@ funcion leer_json(ruta: Texto) {
 
 # Convierte un valor Forja a JSON y lo escribe en un archivo.
 funcion escribir_json(ruta: Texto, valor) {
-    variable res_str = stringificar(valor)
+    variable res_str = _json_stringificar(valor)
     coincidir (res_str) {
         caso Ok(texto_json) -> {
             importar std/archivo

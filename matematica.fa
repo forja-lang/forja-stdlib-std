@@ -11,6 +11,12 @@ funcion absoluto(x) {
     retornar x
 }
 
+# Parte entera de un número (trunca hacia cero)
+# Ejemplo: truncar(3.7) -> 3
+funcion truncar(x) {
+    retornar a_entero(x)
+}
+
 # Retorna el mayor entre dos números
 funcion maximo(a, b) {
     si (a > b) {
