@@ -123,7 +123,7 @@ funcion _cabeceras_a_texto(cabeceras) -> Texto {
         partes = partes + [claves[i], cabeceras[claves[i]]]
         i = i + 1
     }
-    retornar unir(partes, "|")
+    retornar unir_elementos(partes, "|")
 }
 
 funcion _texto_a_mapa(texto: Texto) {
@@ -151,7 +151,7 @@ funcion _h2_enviar_headers(conn, stream_id: Entero, cabeceras, end_stream: Logic
     variable hp_block = _hpack_codificar(cab_texto)
     variable flags = H2_FLAG_END_HEADERS
     si (end_stream) {
-        flags = flags | H2_FLAG_END_STREAM
+        flags = flags + H2_FLAG_END_STREAM
     }
     _h2_enviar_frame(conn, H2_FRAME_HEADERS, flags, stream_id, hp_block)
 }
@@ -209,8 +209,8 @@ funcion _h2_establecer_h2c_directo(servidor, socket) {
         variable partes = _texto_a_mapa(frame_raw)
         variable tipo = a_entero(partes["type"])
         variable flags = a_entero(partes["flags"])
-        _ = partes["stream_id"]
-        _ = partes["payload"]
+        partes["stream_id"]
+        partes["payload"]
 
         si (tipo == H2_FRAME_SETTINGS) {
             # Enviar SETTINGS ACK
@@ -233,7 +233,7 @@ funcion _h2_establecer_h2c_directo(servidor, socket) {
 
 funcion _h2_procesar_frame(servidor, conn, tipo: Entero, flags: Entero, stream_id: Entero, payload_b64: Texto) {
     si (tipo == H2_FRAME_SETTINGS) {
-        variable ack = flags & H2_FLAG_ACK
+        variable ack = ((flags / H2_FLAG_ACK) % 2)
         si (ack == 0) {
             _h2_enviar_frame(conn, H2_FRAME_SETTINGS, H2_FLAG_ACK, 0, "")
         }
@@ -282,8 +282,8 @@ funcion _h2_procesar_headers(servidor, conn, flags: Entero, stream_id: Entero, p
     variable path = cab_map[":path"]
     variable scheme = cab_map[":scheme"]
     variable authority = cab_map[":authority"]
-    _ = scheme
-    _ = authority
+    scheme
+    authority
 
     si (method == nulo) {
         method = "GET"
@@ -295,7 +295,7 @@ funcion _h2_procesar_headers(servidor, conn, flags: Entero, stream_id: Entero, p
     # Extraer query string
     variable ruta = path
     variable query = ""
-    variable pos_q = buscar(path, "?")
+    variable pos_q = indice_de(path, "?")
     si (pos_q >= 0) {
         ruta = path[..pos_q]
         query = path[pos_q+1..]
@@ -325,14 +325,14 @@ funcion _h2_procesar_headers(servidor, conn, flags: Entero, stream_id: Entero, p
     }
 
     # Enviar respuesta
-    variable end_stream = (flags & H2_FLAG_END_STREAM) != 0
+    variable end_stream = ((flags / H2_FLAG_END_STREAM) % 2 == 1)
     _h2_enviar_respuesta(conn, stream_id, respuesta, end_stream)
 }
 
 funcion _h2_procesar_data(conn, stream_id: Entero, payload_b64: Texto) {
-    _ = conn
-    _ = stream_id
-    _ = payload_b64
+    conn
+    stream_id
+    payload_b64
     # El cuerpo viaja en frames DATA luego de HEADERS
     # Para solicitudes simples con END_STREAM en HEADERS, no hay DATA
 }
@@ -462,7 +462,7 @@ funcion _registrar_ruta_h2(servidor, metodo: Texto, ruta: Texto, manejador) {
         i = i + 1
     }
 
-    variable patron_str = unir(patron, "/")
+    variable patron_str = unir_elementos(patron, "/")
 
     si (servidor._rutas[metodo] == nulo) {
         servidor._rutas[metodo] = {}
@@ -520,17 +520,17 @@ funcion iniciar(servidor) {
     mientras (servidor._corriendo) {
         variable cliente = _socket_aceptar(servidor_socket)
         si (cliente == nulo) {
-            siguiente
+            continuar
         }
         si (cliente == -1) {
-            siguiente
+            continuar
         }
 
         # Leer primeros 24 bytes para detectar protocolo
         variable datos = _socket_recibir(cliente, 24)
         si (datos == nulo || datos == "") {
             _socket_cerrar(cliente)
-            siguiente
+            continuar
         }
 
         si (empieza_con(datos, "PRI * HTTP/2.0")) {

@@ -55,16 +55,16 @@ clase ArgResultado {
         este.parser = parser
     }
 
-    funcion presente(self, nombre: Texto) -> Booleano {
-        retornar _arg_flag_presente(self.parser, nombre)
+    funcion presente(nombre: Texto) -> Booleano {
+        retornar _arg_flag_presente(este.parser, nombre)
     }
 
-    funcion texto(self, nombre: Texto) -> Opcion<Texto> {
-        retornar _arg_flag_texto(self.parser, nombre)
+    funcion texto(nombre: Texto) -> Opcion<Texto> {
+        retornar _arg_flag_texto(este.parser, nombre)
     }
 
-    funcion entero(self, nombre: Texto, por_defecto: Entero) -> Entero {
-        variable val = _arg_flag_texto(self.parser, nombre)
+    funcion entero(nombre: Texto, por_defecto: Entero) -> Entero {
+        variable val = _arg_flag_texto(este.parser, nombre)
         coincidir (val) {
             caso Algo(v) -> {
                 variable n = _arg_parsear_entero(v)
@@ -75,16 +75,16 @@ clase ArgResultado {
         }
     }
 
-    funcion booleano(self, nombre: Texto) -> Booleano {
-        retornar _arg_flag_presente(self.parser, nombre)
+    funcion booleano(nombre: Texto) -> Booleano {
+        retornar _arg_flag_presente(este.parser, nombre)
     }
 
-    funcion posicional(self, indice: Entero) -> Opcion<Texto> {
-        retornar _arg_posicional(self.parser, indice)
+    funcion posicional(indice: Entero) -> Opcion<Texto> {
+        retornar _arg_posicional(este.parser, indice)
     }
 
-    funcion mostrar_ayuda(self) {
-        _arg_mostrar_ayuda(self.parser)
+    funcion mostrar_ayuda() {
+        _arg_mostrar_ayuda(este.parser)
     }
 }
 

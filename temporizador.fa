@@ -28,7 +28,7 @@ clase Medicion {
     inicio_ms: Entero
     fin_ms: Entero
 
-    funcion duracion(self) -> Entero { retornar self.fin_ms - self.inicio_ms }
+    funcion duracion() -> Entero { retornar este.fin_ms - este.inicio_ms }
 }
 
 funcion nuevo(duracion_ms: Entero) -> Timer {

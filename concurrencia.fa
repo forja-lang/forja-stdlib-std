@@ -250,11 +250,11 @@ funcion pool_async(num_trabajadores: Entero, procesar: Funcion) -> Arreglo {
         variable id = w
         hilo {
             # Cada worker espera tareas del canal
-            variable continuar = verdadero
-            mientras (continuar) {
+            variable sigue = verdadero
+            mientras (sigue) {
                 variable tarea = rx_tareas.recibir()
                 si (tarea == nulo) {
-                    continuar = falso
+                    sigue = falso
                 } sino {
                     variable resultado = procesar(tarea)
                     tx_resultados.enviar(resultado)

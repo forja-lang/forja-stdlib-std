@@ -95,7 +95,7 @@ funcion _cabeceras_a_texto(cabeceras) -> Texto {
         partes = partes + [claves[i], cabeceras[claves[i]]]
         i = i + 1
     }
-    retornar unir(partes, "|")
+    retornar unir_elementos(partes, "|")
 }
 
 funcion _texto_a_mapa(texto: Texto) {
@@ -171,7 +171,7 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
         i = i + 1
     }
 
-    variable patron_str = unir(patron, "/")
+    variable patron_str = unir_elementos(patron, "/")
 
     si (servidor._rutas[metodo] == nulo) {
         servidor._rutas[metodo] = {}
@@ -297,7 +297,7 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
 
     variable ruta = ruta_completa
     variable query = ""
-    variable pos_q = buscar(ruta_completa, "?")
+    variable pos_q = indice_de(ruta_completa, "?")
     si (pos_q >= 0) {
         ruta = ruta_completa[..pos_q]
         query = ruta_completa[pos_q+1..]
@@ -433,20 +433,20 @@ funcion iniciar(servidor) {
     mientras (servidor._corriendo) {
         variable cliente = _socket_aceptar(servidor_socket)
         si (cliente == nulo) {
-            siguiente
+            continuar
         }
         si (cliente == -1) {
-            siguiente
+            continuar
         }
 
         variable datos = _socket_recibir(cliente, BUFFER_LECTURA)
         si (datos == nulo) {
             _socket_cerrar(cliente)
-            siguiente
+            continuar
         }
         si (datos == "") {
             _socket_cerrar(cliente)
-            siguiente
+            continuar
         }
 
         # ─── Detección de protocolo ─────────────────────────────────────
@@ -455,7 +455,7 @@ funcion iniciar(servidor) {
             imprimir("[servidor_web] Conexion HTTP/2 (h2c) detectada en puerto " + a_texto(servidor._puerto))
             imprimir("[servidor_web] Usa 'importar \"std/servidor_h2\"' y ServidorH2 para manejar HTTP/2")
             _socket_cerrar(cliente)
-            siguiente
+            continuar
         }
 
         # HTTP/2 via Upgrade: h2c
@@ -463,7 +463,7 @@ funcion iniciar(servidor) {
             imprimir("[servidor_web] Solicitud HTTP/1.1 con upgrade h2c detectada")
             imprimir("[servidor_web] Usa 'importar \"std/servidor_h2\"' y ServidorH2 para manejar HTTP/2")
             _socket_cerrar(cliente)
-            siguiente
+            continuar
         }
 
         _manejar_solicitud(servidor, cliente, datos)

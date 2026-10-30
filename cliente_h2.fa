@@ -138,14 +138,14 @@ funcion _resolver_url(url: Texto) {
         }
     }
 
-    variable pos_barra = buscar(resto, "/")
+    variable pos_barra = indice_de(resto, "/")
     variable host_parte = resto
     si (pos_barra >= 0) {
         host_parte = resto[..pos_barra]
         ruta = resto[pos_barra..]
     }
 
-    variable pos_dos_puntos = buscar(host_parte, ":")
+    variable pos_dos_puntos = indice_de(host_parte, ":")
     si (pos_dos_puntos >= 0) {
         host = host_parte[..pos_dos_puntos]
         puerto = a_entero(host_parte[pos_dos_puntos + 1..])
@@ -207,11 +207,11 @@ funcion _cliente_conectar(cliente) -> Logico {
         variable partes = _texto_a_mapa(frame_raw)
         variable tipo = a_entero(partes["type"])
         variable flags = a_entero(partes["flags"])
-        _ = partes["stream_id"]
-        _ = partes["payload"]
+        partes["stream_id"]
+        partes["payload"]
 
         si (tipo == H2_FRAME_SETTINGS) {
-            si ( (flags & H2_FLAG_ACK) != 0) {
+            si ( ((flags / H2_FLAG_ACK) % 2 == 1)) {
                 ack_ok = verdadero
             } sino {
                 settings_ok = verdadero
@@ -274,7 +274,7 @@ funcion _cliente_enviar_solicitud(cliente, metodo: Texto, ruta: Texto, cuerpo: T
     # Enviar HEADERS frame
     variable flags = H2_FLAG_END_HEADERS
     si (cuerpo == "" || cuerpo == nulo) {
-        flags = flags | H2_FLAG_END_STREAM
+        flags = flags + H2_FLAG_END_STREAM
     }
     _h2_escribir_frame(socket, H2_FRAME_HEADERS, flags, stream_id, hp_b64)
 
@@ -314,7 +314,7 @@ funcion _cliente_leer_respuesta(cliente, stream_id: Entero, opciones) {
             # Manejar frames de conexion global
             si (frame_stream == 0) {
                 si (tipo == H2_FRAME_SETTINGS) {
-                    si ( (flags & H2_FLAG_ACK) == 0) {
+                    si ( ((flags / H2_FLAG_ACK) % 2 == 0)) {
                         _h2_escribir_frame(socket, H2_FRAME_SETTINGS, H2_FLAG_ACK, 0, "")
                     }
                 }
@@ -322,7 +322,7 @@ funcion _cliente_leer_respuesta(cliente, stream_id: Entero, opciones) {
                     _h2_escribir_frame(socket, H2_FRAME_PING, H2_FLAG_ACK, 0, payload_b64)
                 }
             }
-            siguiente
+            continuar
         }
 
         si (tipo == H2_FRAME_HEADERS) {
@@ -336,7 +336,7 @@ funcion _cliente_leer_respuesta(cliente, stream_id: Entero, opciones) {
                 cabeceras = cab_map
             }
             cabeceras_recibidas = verdadero
-            si ( (flags & H2_FLAG_END_STREAM) != 0) {
+            si ( ((flags / H2_FLAG_END_STREAM) % 2 == 1)) {
                 romper
             }
         }
@@ -348,7 +348,7 @@ funcion _cliente_leer_respuesta(cliente, stream_id: Entero, opciones) {
                     cuerpo = cuerpo + datos
                 }
             }
-            si ( (flags & H2_FLAG_END_STREAM) != 0) {
+            si ( ((flags / H2_FLAG_END_STREAM) % 2 == 1)) {
                 romper
             }
         }
@@ -383,7 +383,7 @@ funcion _cliente_leer_respuesta(cliente, stream_id: Entero, opciones) {
 
 # ─── Metodos publicos ────────────────────────────────────────────────
 
-funcion _realizar_solicitud(metodo: Texto, url: Texto, cuerpo: Texto, opciones) {
+funcion _realizar_solicitud(metodo: Texto, url: Texto, cuerpo: Texto, mut opciones) {
     variable cliente = nuevo ClienteH2(url)
     variable info = _resolver_url(url)
     variable ruta = info["ruta"]

@@ -41,7 +41,8 @@ funcion argumentos() -> Arreglo<Texto> {
 # Retorna Opcion<Texto> — Algo(valor) si existe, Nada si no existe
 funcion variable_entorno(nombre: Texto) -> Opcion<Texto> {
     variable valor = _sistema_variable_entorno(nombre)
-    si (valor == "") {
+    // La nativa devuelve `nulo` cuando la variable no existe (no "").
+    si (valor == nulo || valor == "") {
         retornar Nada()
     } sino {
         retornar Algo(valor)
