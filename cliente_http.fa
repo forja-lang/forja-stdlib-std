@@ -92,25 +92,25 @@ funcion _resolver_url(url: Texto) {
     si (empieza_con(url, "https://")) {
         protocolo = "https"
         puerto = 443
-        resto = url[8..]
+        resto = subcadena(url, 8, longitud(url) - 8)
     } sino {
         si (empieza_con(url, "http://")) {
             protocolo = "http"
-            resto = url[7..]
+            resto = subcadena(url, 7, longitud(url) - 7)
         }
     }
 
     variable pos_barra = indice_de(resto, "/")
     variable host_parte = resto
     si (pos_barra >= 0) {
-        host_parte = resto[..pos_barra]
-        ruta = resto[pos_barra..]
+        host_parte = subcadena(resto, 0, pos_barra)
+        ruta = subcadena(resto, pos_barra, longitud(resto) - pos_barra)
     }
 
     variable pos_dos_puntos = indice_de(host_parte, ":")
     si (pos_dos_puntos >= 0) {
-        host = host_parte[..pos_dos_puntos]
-        puerto = a_entero(host_parte[pos_dos_puntos + 1..])
+        host = subcadena(host_parte, 0, pos_dos_puntos)
+        puerto = a_entero(subcadena(host_parte, pos_dos_puntos + 1, longitud(host_parte) - (pos_dos_puntos + 1)))
     } sino {
         host = host_parte
     }
