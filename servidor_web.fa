@@ -163,7 +163,7 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
     mientras (i < longitud(partes_ruta)) {
         variable parte = partes_ruta[i]
         si (longitud(parte) > 0 && parte[0] == ":") {
-            params_encontrados = params_encontrados + [parte[1..]]
+            params_encontrados = params_encontrados + [subcadena(parte, 1, longitud(parte) - 1)]
             patron = patron + ["(:param)"]
         } sino {
             patron = patron + [parte]
@@ -299,8 +299,8 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     variable query = ""
     variable pos_q = indice_de(ruta_completa, "?")
     si (pos_q >= 0) {
-        ruta = ruta_completa[..pos_q]
-        query = ruta_completa[pos_q+1..]
+        ruta = subcadena(ruta_completa, 0, pos_q)
+        query = subcadena(ruta_completa, pos_q+1, longitud(ruta_completa) - (pos_q+1))
     }
 
     variable parametros = {}
@@ -345,7 +345,7 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
             variable prefijo = claves_static[i]
             si (empieza_con(ruta, prefijo)) {
                 variable dir = servidor._static_rutas[prefijo]
-                variable ruta_archivo = dir + "/" + ruta[longitud(prefijo)..]
+                variable ruta_archivo = dir + "/" + subcadena(ruta, longitud(prefijo), longitud(ruta) - longitud(prefijo))
                 variable respuesta = nuevo RespuestaHTTP()
                 respuesta = error_respuesta(respuesta, 404)
                 _enviar_respuesta(socket, respuesta)
