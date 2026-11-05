@@ -297,8 +297,8 @@ funcion _h2_procesar_headers(servidor, conn, flags: Entero, stream_id: Entero, p
     variable query = ""
     variable pos_q = indice_de(path, "?")
     si (pos_q >= 0) {
-        ruta = path[..pos_q]
-        query = path[pos_q+1..]
+        ruta = subcadena(path, 0, pos_q)
+        query = subcadena(path, pos_q+1, longitud(path) - (pos_q+1))
     }
 
     # Construir solicitud
@@ -454,7 +454,7 @@ funcion _registrar_ruta_h2(servidor, metodo: Texto, ruta: Texto, manejador) {
     mientras (i < longitud(partes_ruta)) {
         variable parte = partes_ruta[i]
         si (longitud(parte) > 0 && parte[0] == ":") {
-            params_encontrados = params_encontrados + [parte[1..]]
+            params_encontrados = params_encontrados + [subcadena(parte, 1, longitud(parte) - 1)]
             patron = patron + ["(:param)"]
         } sino {
             patron = patron + [parte]
