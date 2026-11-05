@@ -15,8 +15,14 @@
 # Hex y URL son implementados en Forja puro.
 
 clase ErrorCodificacion {
-    mensaje: Texto
-    codigo: Entero
+    variable mensaje: Texto
+    variable codigo: Entero
+    # Sin constructor, `nuevo ErrorCodificacion(...)` fallaba en runtime con
+    # "función no definida: 'ErrorCodificacion.nuevo'".
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
 }
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -50,8 +56,10 @@ funcion hex_codificar(texto: Texto) -> Texto {
     variable i = 0
     mientras (i < longitud(texto)) {
         variable codigo = a_codigo(texto[i])
-        resultado = resultado + _digito_hex((codigo >> 4) & 15)
-        resultado = resultado + _digito_hex(codigo & 15)
+        # El lenguaje no tiene desplazamientos ni AND binario: sobre un byte,
+        # `x >> 4` es `x / 16` y `x & 15` es `x % 16`.
+        resultado = resultado + _digito_hex(codigo / 16)
+        resultado = resultado + _digito_hex(codigo % 16)
         i = i + 1
     }
     retornar resultado
@@ -85,7 +93,7 @@ funcion url_codificar(texto: Texto) -> Texto {
             resultado = resultado + c
         } sino {
             variable codigo = a_codigo(c)
-            resultado = resultado + "%" + _digito_hex((codigo >> 4) & 15) + _digito_hex(codigo & 15)
+            resultado = resultado + "%" + _digito_hex(codigo / 16) + _digito_hex(codigo % 16)
         }
         i = i + 1
     }
