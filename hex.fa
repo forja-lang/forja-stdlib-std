@@ -58,8 +58,14 @@
 #   hex.mcm(a, b)                  — mínimo común múltiplo
 
 clase ErrorConversion {
-    mensaje: Texto
-    codigo: Entero
+    variable mensaje: Texto
+    variable codigo: Entero
+    # Sin constructor, `nuevo ErrorConversion(...)` fallaba en runtime con
+    # "función no definida: 'ErrorConversion.nuevo'".
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
 }
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -152,6 +158,62 @@ funcion base_n_a_decimal(numero: Texto, base: Entero) -> Resultado<Entero, Error
 
 # Convierte un entero a string en cualquier base (2-36)
 # Los dígitos > 9 se representan con letras mayúsculas (A-Z)
+# 2^n sin operadores de bits (n >= 0).
+funcion _potencia_dos(n: Entero) -> Entero {
+    variable r = 1
+    variable i = 0
+    mientras (i < n) {
+        r = r * 2
+        i = i + 1
+    }
+    retornar r
+}
+
+# AND bit a bit sin operadores de bits.
+funcion _y(a: Entero, b: Entero) -> Entero {
+    variable resultado = 0
+    variable bit = 1
+    mientras (a >= bit || b >= bit) {
+        variable ba = (a / bit) % 2
+        variable bb = (b / bit) % 2
+        si (ba == 1 && bb == 1) {
+            resultado = resultado + bit
+        }
+        bit = bit * 2
+    }
+    retornar resultado
+}
+
+# OR bit a bit sin operadores de bits.
+funcion _o(a: Entero, b: Entero) -> Entero {
+    variable resultado = 0
+    variable bit = 1
+    mientras (a >= bit || b >= bit) {
+        variable ba = (a / bit) % 2
+        variable bb = (b / bit) % 2
+        si (ba == 1 || bb == 1) {
+            resultado = resultado + bit
+        }
+        bit = bit * 2
+    }
+    retornar resultado
+}
+
+# XOR bit a bit sin operadores de bits: recorre los bits con división/módulo.
+funcion _xor(a: Entero, b: Entero) -> Entero {
+    variable resultado = 0
+    variable bit = 1
+    mientras (a >= bit || b >= bit) {
+        variable ba = (a / bit) % 2
+        variable bb = (b / bit) % 2
+        si (ba != bb) {
+            resultado = resultado + bit
+        }
+        bit = bit * 2
+    }
+    retornar resultado
+}
+
 funcion decimal_a_base_n(n: Entero, base: Entero) -> Resultado<Texto, ErrorConversion> {
     si (base < 2 || base > 36) {
         retornar Error(nuevo ErrorConversion("Base inválida: " + a_texto(base) + ". Las bases válidas son 2-36", 1))
@@ -288,8 +350,10 @@ funcion texto_a_hex(texto: Texto) -> Texto {
     variable i = 0
     mientras (i < longitud(texto)) {
         variable codigo = a_codigo(texto[i])
-        resultado = resultado + _valor_a_digito((codigo >> 4) & 15)
-        resultado = resultado + _valor_a_digito(codigo & 15)
+        # Sin operadores de bits en el lenguaje: sobre un byte, `x >> 4` es
+        # `x / 16` y `x & 15` es `x % 16`.
+        resultado = resultado + _valor_a_digito(codigo / 16)
+        resultado = resultado + _valor_a_digito(codigo % 16)
         i = i + 1
     }
     retornar resultado
@@ -333,7 +397,7 @@ funcion y_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
     coincidir (na) {
         caso Ok(va) -> {
             coincidir (nb) {
-                caso Ok(vb) -> { retornar decimal_a_base_n(va & vb, 16) }
+                caso Ok(vb) -> { retornar decimal_a_base_n(_y(va, vb), 16) }
             }
         }
     }
@@ -352,7 +416,7 @@ funcion o_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
     coincidir (na) {
         caso Ok(va) -> {
             coincidir (nb) {
-                caso Ok(vb) -> { retornar decimal_a_base_n(va | vb, 16) }
+                caso Ok(vb) -> { retornar decimal_a_base_n(_o(va, vb), 16) }
             }
         }
     }
@@ -371,7 +435,7 @@ funcion xor_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
     coincidir (na) {
         caso Ok(va) -> {
             coincidir (nb) {
-                caso Ok(vb) -> { retornar decimal_a_base_n(va ^ vb, 16) }
+                caso Ok(vb) -> { retornar decimal_a_base_n(_xor(va, vb), 16) }
             }
         }
     }
@@ -380,11 +444,13 @@ funcion xor_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 # Operación complemento (NOT) sobre un string hex
 # Invierte todos los bits del valor
 funcion complemento(a: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    coincidir (na) {
-        caso Error(e) -> { retornar Error(e) }
-        caso Ok(va) -> { retornar decimal_a_base_n(~va, 16) }
-    }
+    // El lenguaje no tiene NOT binario (`~`): el complemento a 1 de un entero
+    // arbitrario no tiene una representación de longitud finita en hex.
+    variable _na = a_decimal(a)
+    retornar Error(nuevo ErrorConversion(
+        "complemento no soportado: el lenguaje no tiene NOT binario",
+        4,
+    ))
 }
 
 # Desplaza los bits a la izquierda n posiciones
@@ -392,7 +458,7 @@ funcion desplazar_izquierda(a: Texto, n: Entero) -> Resultado<Texto, ErrorConver
     variable na = a_decimal(a)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
-        caso Ok(va) -> { retornar decimal_a_base_n(va << n, 16) }
+        caso Ok(va) -> { retornar decimal_a_base_n(va * _potencia_dos(n), 16) }
     }
 }
 
@@ -401,7 +467,7 @@ funcion desplazar_derecha(a: Texto, n: Entero) -> Resultado<Texto, ErrorConversi
     variable na = a_decimal(a)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
-        caso Ok(va) -> { retornar decimal_a_base_n(va >> n, 16) }
+        caso Ok(va) -> { retornar decimal_a_base_n(va / _potencia_dos(n), 16) }
     }
 }
 
