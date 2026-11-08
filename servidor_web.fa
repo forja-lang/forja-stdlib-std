@@ -188,7 +188,7 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
     }
 }
 
-funcion obtener(servidor, ruta: Texto, manejador) {
+funcion registrar_obtener(servidor, ruta: Texto, manejador) {
     _registrar_ruta(servidor, "GET", ruta, manejador)
 }
 

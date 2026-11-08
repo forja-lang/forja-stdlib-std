@@ -170,7 +170,12 @@ funcion scrypt(password: Texto, sal: Texto, n: Entero, r: Entero, longitud: Ente
     si (longitud(password) == 0 || longitud(sal) == 0) {
         retornar Error(nuevo ErrorCrypto("Password y sal no pueden estar vacíos", 6))
     }
-    si (n < 2 || (n & (n - 1)) != 0) {
+    # `&` bit a bit no existe en Forja: comprobar la potencia de 2 duplicando.
+    variable potencia = 1
+    mientras (potencia < n) {
+        potencia = potencia * 2
+    }
+    si (n < 2 || potencia != n) {
         retornar Error(nuevo ErrorCrypto("n debe ser potencia de 2 y >= 2", 10))
     }
     retornar Ok(_scrypt(password, sal, n, r, longitud))

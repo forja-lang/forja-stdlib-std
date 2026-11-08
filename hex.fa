@@ -4,7 +4,7 @@
 # Uso: importar std/hex
 #
 # Funciones de conversión:
-#   hex.a_decimal(hex)             — hexadecimal → entero
+#   hex.hex_a_decimal(hex)             — hexadecimal → entero
 #   hex.a_binario(hex)             — hexadecimal → binario (string)
 #   hex.a_octal(hex)               — hexadecimal → octal (string)
 #
@@ -244,13 +244,13 @@ funcion decimal_a_base_n(n: Entero, base: Entero) -> Resultado<Texto, ErrorConve
 # ═════════════════════════════════════════════════════════════════════════
 
 # Convierte hexadecimal a entero decimal
-funcion a_decimal(hex: Texto) -> Resultado<Entero, ErrorConversion> {
+funcion hex_a_decimal(hex: Texto) -> Resultado<Entero, ErrorConversion> {
     retornar base_n_a_decimal(hex, 16)
 }
 
 # Convierte hexadecimal a string binario
 funcion a_binario(hex: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable n = a_decimal(hex)
+    variable n = hex_a_decimal(hex)
     coincidir (n) {
         caso Error(e) -> { retornar Error(e) }
         caso Ok(v) -> { retornar decimal_a_base_n(v, 2) }
@@ -259,7 +259,7 @@ funcion a_binario(hex: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Convierte hexadecimal a string octal
 funcion a_octal(hex: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable n = a_decimal(hex)
+    variable n = hex_a_decimal(hex)
     coincidir (n) {
         caso Error(e) -> { retornar Error(e) }
         caso Ok(v) -> { retornar decimal_a_base_n(v, 8) }
@@ -386,8 +386,8 @@ funcion hex_a_texto(hex: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Operación Y bit a bit (AND) entre dos strings hex
 funcion y_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -405,8 +405,8 @@ funcion y_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Operación O bit a bit (OR) entre dos strings hex
 funcion o_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -424,8 +424,8 @@ funcion o_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Operación O exclusiva (XOR) bit a bit entre dos strings hex
 funcion xor_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -446,7 +446,7 @@ funcion xor_bits(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 funcion complemento(a: Texto) -> Resultado<Texto, ErrorConversion> {
     // El lenguaje no tiene NOT binario (`~`): el complemento a 1 de un entero
     // arbitrario no tiene una representación de longitud finita en hex.
-    variable _na = a_decimal(a)
+    variable _na = hex_a_decimal(a)
     retornar Error(nuevo ErrorConversion(
         "complemento no soportado: el lenguaje no tiene NOT binario",
         4,
@@ -455,7 +455,7 @@ funcion complemento(a: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Desplaza los bits a la izquierda n posiciones
 funcion desplazar_izquierda(a: Texto, n: Entero) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
+    variable na = hex_a_decimal(a)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
         caso Ok(va) -> { retornar decimal_a_base_n(va * _potencia_dos(n), 16) }
@@ -464,7 +464,7 @@ funcion desplazar_izquierda(a: Texto, n: Entero) -> Resultado<Texto, ErrorConver
 
 # Desplaza los bits a la derecha n posiciones
 funcion desplazar_derecha(a: Texto, n: Entero) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
+    variable na = hex_a_decimal(a)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
         caso Ok(va) -> { retornar decimal_a_base_n(va / _potencia_dos(n), 16) }
@@ -477,8 +477,8 @@ funcion desplazar_derecha(a: Texto, n: Entero) -> Resultado<Texto, ErrorConversi
 
 # Suma dos números hexadecimales
 funcion sumar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -496,8 +496,8 @@ funcion sumar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Resta dos números hexadecimales (a - b)
 funcion restar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -515,8 +515,8 @@ funcion restar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Multiplica dos números hexadecimales
 funcion multiplicar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -533,9 +533,9 @@ funcion multiplicar(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 }
 
 # Divide dos números hexadecimales (cociente entero)
-funcion dividir(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+funcion dividir_hex(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -558,8 +558,8 @@ funcion dividir(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Módulo entre dos números hexadecimales
 funcion modulo(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -582,8 +582,8 @@ funcion modulo(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Potencia: a^exp (exponente entero no negativo)
 funcion potencia(a: Texto, exp: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable base_n = a_decimal(a)
-    variable exp_n = a_decimal(exp)
+    variable base_n = hex_a_decimal(a)
+    variable exp_n = hex_a_decimal(exp)
     coincidir (base_n) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -609,8 +609,8 @@ funcion potencia(a: Texto, exp: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Máximo Común Divisor (algoritmo de Euclides)
 funcion mcd(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -638,8 +638,8 @@ funcion mcd(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
 
 # Mínimo Común Múltiplo
 funcion mcm(a: Texto, b: Texto) -> Resultado<Texto, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -689,8 +689,8 @@ funcion medir(a: Texto) -> Resultado<Entero, ErrorConversion> {
 
 # Compara si dos strings hex representan el mismo valor
 funcion iguales(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -708,8 +708,8 @@ funcion iguales(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
 
 # Verdadero si a > b
 funcion mayor_que(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }
@@ -727,8 +727,8 @@ funcion mayor_que(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
 
 # Verdadero si a < b
 funcion menor_que(a: Texto, b: Texto) -> Resultado<Booleano, ErrorConversion> {
-    variable na = a_decimal(a)
-    variable nb = a_decimal(b)
+    variable na = hex_a_decimal(a)
+    variable nb = hex_a_decimal(b)
     coincidir (na) {
         caso Error(e) -> { retornar Error(e) }
     }

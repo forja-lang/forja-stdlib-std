@@ -8,8 +8,8 @@
 #
 # Funciones:
 #   mmap.abrir(ruta, offset, longitud, modo) -> Resultado<Entero, MmapError>
-#   mmap.leer(handle, offset_local, longitud) -> Resultado<Texto, MmapError>
-#   mmap.escribir(handle, offset_local, datos) -> Resultado<Entero, MmapError>
+#   mmap.leer_region(handle, offset_local, longitud) -> Resultado<Texto, MmapError>
+#   mmap.escribir_region(handle, offset_local, datos) -> Resultado<Entero, MmapError>
 #   mmap.sincronizar(handle) -> Resultado<MmapError>
 #   mmap.cerrar(handle) -> Resultado<MmapError>
 #   mmap.tamano_archivo(ruta) -> Resultado<Entero, MmapError>
@@ -19,7 +19,7 @@
 #   variable h = mmap.abrir("datos.bin", 0, 0, "r")
 #   coincidir (h) {
 #       caso Ok(handle) -> {
-#           variable datos = mmap.leer(handle, 0, 100)
+#           variable datos = mmap.leer_region(handle, 0, 100)
 #           mmap.cerrar(handle)
 #       }
 #       caso Error(e) -> escribir("Error: " + e.mensaje)
@@ -89,7 +89,7 @@ funcion cerrar(handle: Entero) -> Resultado<MmapError> {
 # handle: handle del mapping
 # offset_local: offset dentro de la región mapeada
 # longitud: cantidad de bytes a leer
-funcion leer(handle: Entero, offset_local: Entero, longitud: Entero) -> Resultado<Texto, MmapError> {
+funcion leer_region(handle: Entero, offset_local: Entero, longitud: Entero) -> Resultado<Texto, MmapError> {
     si (offset_local < 0) {
         retornar Error(nuevo MmapError("El offset_local no puede ser negativo", 4))
     }
@@ -108,7 +108,7 @@ funcion leer(handle: Entero, offset_local: Entero, longitud: Entero) -> Resultad
 # handle: handle del mapping
 # offset_local: offset dentro de la región mapeada
 # datos: texto a escribir
-funcion escribir(handle: Entero, offset_local: Entero, datos: Texto) -> Resultado<Entero, MmapError> {
+funcion escribir_region(handle: Entero, offset_local: Entero, datos: Texto) -> Resultado<Entero, MmapError> {
     si (offset_local < 0) {
         retornar Error(nuevo MmapError("El offset_local no puede ser negativo", 4))
     }

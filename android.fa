@@ -8,7 +8,7 @@
 # ═════════════════════════════════════════════════════════════════════════
 
 # Muestra un mensaje emergente nativo (Toast) en la pantalla
-funcion toast(mensaje: Texto, largo: Booleano = falso) {
+funcion toast(mensaje: Texto, largo: Booleano) {
     _android_toast(mensaje, largo)
 }
 
@@ -37,7 +37,7 @@ funcion pantalla_orientacion(modo: Texto) {
 # ═════════════════════════════════════════════════════════════════════════
 
 # Crea un canal de notificación (requerido en Android 8.0+)
-funcion notificacion_canal_crear(id: Texto, nombre: Texto, importancia: Texto = "alta") {
+funcion notificacion_canal_crear(id: Texto, nombre: Texto, importancia: Texto) {
     _android_notificacion_canal_crear(id, nombre, importancia)
 }
 
@@ -61,7 +61,7 @@ funcion almacenamiento_guardar(clave: Texto, valor: Texto) {
 }
 
 # Lee una preferencia guardada (retorna 'defecto' si la clave no existe)
-funcion almacenamiento_leer(clave: Texto, defecto: Texto = "") -> Texto {
+funcion almacenamiento_leer(clave: Texto, defecto: Texto) -> Texto {
     retornar _android_almacenamiento_leer(clave, defecto)
 }
 
@@ -142,7 +142,7 @@ funcion permiso_solicitar(permiso: Texto) {
 }
 
 # Abre la autenticación biométrica (Huella / Rostro). Retorna verdadero si fue exitoso
-funcion biometria_autenticar(titulo: Texto = "Autenticación Biométrica") -> Booleano {
+funcion biometria_autenticar(titulo: Texto) -> Booleano {
     retornar _android_biometria_autenticar(titulo)
 }
 

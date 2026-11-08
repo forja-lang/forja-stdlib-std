@@ -233,7 +233,7 @@ funcion _realizar_solicitud(metodo: Texto, url: Texto, cuerpo: Texto, opciones) 
 
 # ─── API Publica ────────────────────────────────────────────────────
 
-funcion obtener(url: Texto) {
+funcion obtener_recurso(url: Texto) {
     variable opciones = nuevo OpcionesCliente()
     retornar _realizar_solicitud("GET", url, "", opciones)
 }

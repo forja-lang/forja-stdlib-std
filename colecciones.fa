@@ -171,8 +171,8 @@ funcion unico(arr) {
 
 # Invierte el orden del arreglo.
 # Retorna un nuevo arreglo con los elementos en orden inverso.
-# Ejemplo: invertir([1,2,3]) → [3,2,1]
-funcion invertir(arr) {
+# Ejemplo: invertir_arreglo([1,2,3]) → [3,2,1]
+funcion invertir_arreglo(arr) {
     variable res = []
     variable i = longitud(arr) - 1
     mientras (i >= 0) {

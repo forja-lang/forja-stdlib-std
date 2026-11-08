@@ -479,7 +479,7 @@ funcion _registrar_ruta_h2(servidor, metodo: Texto, ruta: Texto, manejador) {
     }
 }
 
-funcion obtener(servidor, ruta: Texto, manejador) {
+funcion registrar_obtener(servidor, ruta: Texto, manejador) {
     _registrar_ruta_h2(servidor, "GET", ruta, manejador)
 }
 

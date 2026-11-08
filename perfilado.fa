@@ -28,10 +28,6 @@ funcion detener(etiqueta: Texto) -> Resultado<ReportePerfilado, ErrorPerfilado> 
     retornar _perfilado_detener(etiqueta);
 }
 
-funcion medir(etiqueta: Texto, iteraciones: Entero, bloque: Texto) -> Resultado<ReportePerfilado, ErrorPerfilado> {
-    retornar _perfilado_medir(etiqueta, iteraciones, bloque);
-}
-
 funcion reportes() -> Arreglo<ReportePerfilado> {
     retornar _perfilado_reportes();
 }
