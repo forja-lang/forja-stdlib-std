@@ -38,6 +38,15 @@ funcion comprobar_texto(nombre: Texto, obtenido, esperado: Texto) {
     }
 }
 
+# Desenvuelve un Resultado/Opcion; devuelve nulo si es Error/Ninguno.
+funcion ok(v) {
+    coincidir (v) {
+        caso Ok(x) -> { retornar x }
+        caso Alguno(x) -> { retornar x }
+        caso _ -> { retornar nulo }
+    }
+}
+
 funcion resumen() {
     escribir("  " + a_texto(_pruebas) + " pruebas, " + a_texto(_fallas) + " fallas")
     si (_fallas > 0) {

@@ -13,8 +13,9 @@ clase ErrorUrl {
     }
 }
 
-funcion parsear(url: Texto) -> Resultado<URL, ErrorUrl> {
-    retornar _url_parsear(url);
+# Devuelve Ok(mapa) con las claves: esquema, host, puerto, ruta, query.
+funcion parsear(url: Texto) -> Resultado<Mapa<Texto, Texto>, ErrorUrl> {
+    retornar Ok(_url_parsear(url));
 }
 
 funcion construir(esquema: Texto, host: Texto, puerto: Entero, ruta: Texto, query: Texto) -> Texto {
@@ -29,6 +30,7 @@ funcion decodificar(texto: Texto) -> Texto {
     retornar _url_decodificar(texto);
 }
 
-funcion query_parsear(query: Texto) -> Resultado<Arreglo<(Texto, Texto)>, ErrorUrl> {
-    retornar _query_parsear(query);
+# Devuelve Ok(mapa) con cada parámetro de la query ya decodificado.
+funcion query_parsear(query: Texto) -> Resultado<Mapa<Texto, Texto>, ErrorUrl> {
+    retornar Ok(_query_parsear(query));
 }

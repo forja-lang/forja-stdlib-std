@@ -10,6 +10,8 @@ importar "std/colecciones"
 
 # ─── Constantes HTTP ────────────────────────────────────────────────
 constante BUFFER_LECTURA = 8192
+# Tope de cabeceras antes de haber encontrado el fin de cabeceras (slowloris).
+constante MAX_CABECERAS = 65536
 
 # ─── Clase ErrorHTTP ────────────────────────────────────────────────
 clase ErrorHTTP {
@@ -163,6 +165,12 @@ funcion _leer_solicitud(socket, max_cuerpo: Entero) {
             romper
         }
         datos = datos + trozo
+
+        si (fin_cabeceras < 0 && longitud(datos) > MAX_CABECERAS) {
+            # Cabeceras gigantes sin terminar (slowloris): se corta.
+            # shortcut: no se responde 431, se cierra el socket.
+            retornar nulo
+        }
 
         si (fin_cabeceras < 0) {
             fin_cabeceras = indice_de(datos, "\r\n\r\n")
@@ -376,10 +384,7 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
 
     variable parametros = {}
     si (longitud(query) > 0) {
-        variable query_parseado = _query_parsear(query)
-        si (query_parseado != -1) {
-            parametros = _texto_a_mapa(query_parseado)
-        }
+        parametros = _query_parsear(query)
     }
 
     variable solicitud = nuevo SolicitudHTTP()

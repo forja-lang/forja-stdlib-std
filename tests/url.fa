@@ -6,6 +6,17 @@
 importar "std/url"
 importar "std/tests/arnes"
 
+variable u = ok(url.parsear("https://api.ejemplo.com:8080/a/b?x=1"))
+comprobar_texto("parsear: esquema", u["esquema"], "https")
+comprobar_texto("parsear: host", u["host"], "api.ejemplo.com")
+comprobar_texto("parsear: puerto", u["puerto"], "8080")
+comprobar_texto("parsear: ruta", u["ruta"], "/a/b")
+comprobar_texto("parsear: query", u["query"], "x=1")
+
+variable q = ok(url.query_parsear("a=1&b=hola%20mundo"))
+comprobar_texto("query_parsear: a", q["a"], "1")
+comprobar_texto("query_parsear: b decodificado", q["b"], "hola mundo")
+
 comprobar_texto("codificar espacio", url.codificar("a b"), "a+b")
 comprobar_texto("codificar ampersand", url.codificar("a&b"), "a%26b")
 comprobar_texto("decodificar %20", url.decodificar("a%20b"), "a b")

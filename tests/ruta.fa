@@ -1,0 +1,15 @@
+# Tests de std/ruta.
+importar "std/ruta"
+importar "std/tests/arnes"
+
+comprobar_texto("extension", ruta.extension("a/b/c.txt"), "txt")
+comprobar_texto("sin_extension", ruta.sin_extension("a/b/c.txt"), "a/b/c")
+comprobar_texto("nombre_archivo", ruta.nombre_archivo("a/b/c.txt"), "c.txt")
+comprobar_texto("dir_padre", ruta.dir_padre("a/b/c.txt"), "a/b")
+variable ruta_abs = ok(ruta.absoluta("x"))
+comprobar("absoluta devuelve texto", tipo(ruta_abs) == "texto")
+comprobar("es_absoluta reconoce la ruta absoluta", ruta.es_absoluta(ruta_abs))
+comprobar("es_absoluta rechaza la relativa", !ruta.es_absoluta("x"))
+comprobar_texto("unir", ruta.unir("a", "b"), "a/b")
+
+resumen()

@@ -1,0 +1,17 @@
+# Tests de std/csv.
+importar "std/csv"
+importar "std/tests/arnes"
+
+variable filas = ok(csv.parsear("a,b\n1,2\n3,4\n"))
+comprobar_igual("parsear: cantidad de filas", longitud(filas), 3)
+comprobar_igual("parsear: primera fila", filas[0], ["a", "b"])
+comprobar_igual("parsear: segunda fila", filas[1], ["1", "2"])
+
+variable con_cabeceras = ok(csv.parsear_con_cabeceras("nombre,edad\nana,30\n"))
+comprobar_igual("con cabeceras: una fila", longitud(con_cabeceras), 1)
+comprobar_texto("con cabeceras: campo", con_cabeceras[0]["nombre"], "ana")
+
+variable generado = csv.generar([["a", "b"], ["1", "2"]])
+comprobar("generar incluye valores", contiene(generado, "a") && contiene(generado, "2"))
+
+resumen()

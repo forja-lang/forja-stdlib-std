@@ -312,10 +312,7 @@ funcion _h2_procesar_headers(servidor, conn, flags: Entero, stream_id: Entero, p
 
     variable parametros = {}
     si (longitud(query) > 0) {
-        variable query_parseado = _query_parsear(query)
-        si (query_parseado != -1) {
-            parametros = _texto_a_mapa(query_parseado)
-        }
+        parametros = _query_parsear(query)
     }
     solicitud.parametros = parametros
 

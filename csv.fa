@@ -13,12 +13,30 @@ clase ErrorCsv {
     }
 }
 
+# Nota: los nativos devuelven la estructura cruda (arreglos), no un Resultado.
+# El envoltorio en `Ok` mantiene el contrato declarado.
 funcion parsear(texto: Texto) -> Resultado<Arreglo<Arreglo<Texto>>, ErrorCsv> {
-    retornar _csv_parsear(texto);
+    retornar Ok(_csv_parsear(texto));
 }
 
+# El nativo devuelve, por fila, un arreglo de pares [cabecera, valor]; acá se
+# convierte a un mapa, que es lo que promete la firma.
 funcion parsear_con_cabeceras(texto: Texto) -> Resultado<Arreglo<Mapa<Texto, Texto>>, ErrorCsv> {
-    retornar _csv_parsear_con_cabeceras(texto);
+    variable crudas = _csv_parsear_con_cabeceras(texto);
+    variable filas = [];
+    variable i = 0;
+    mientras (i < longitud(crudas)) {
+        variable pares = crudas[i];
+        variable registro = {};
+        variable j = 0;
+        mientras (j < longitud(pares)) {
+            registro[pares[j][0]] = pares[j][1];
+            j = j + 1;
+        }
+        filas = filas + [registro];
+        i = i + 1;
+    }
+    retornar Ok(filas);
 }
 
 funcion generar(filas: Arreglo<Arreglo<Texto>>) -> Texto {

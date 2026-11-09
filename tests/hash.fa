@@ -1,0 +1,12 @@
+# Tests de std/hash.
+importar "std/hash"
+importar "std/tests/arnes"
+
+comprobar("sha256 de vacío devuelve Error", ok(hash.sha256("")) == nulo)
+comprobar_texto("sha256 de 'abc'", ok(hash.sha256("abc")), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+comprobar_igual("sha256: 64 caracteres hex", longitud(ok(hash.sha256("x"))), 64)
+comprobar("sha256 distinto para distinta entrada", ok(hash.sha256("a")) != ok(hash.sha256("b")))
+comprobar_igual("hmac_sha256: 64 caracteres", longitud(ok(hash.hmac_sha256("clave", "dato"))), 64)
+comprobar("hmac depende de la clave", ok(hash.hmac_sha256("k1", "d")) != ok(hash.hmac_sha256("k2", "d")))
+
+resumen()

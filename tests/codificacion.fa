@@ -1,0 +1,15 @@
+# Tests de std/codificacion (base64, hex, url).
+importar "std/codificacion"
+importar "std/tests/arnes"
+
+comprobar_texto("base64 de 'hola'", codificacion.base64_codificar("hola"), "aG9sYQ==")
+comprobar_texto("base64 roundtrip", ok(codificacion.base64_decodificar(codificacion.base64_codificar("hola mundo"))), "hola mundo")
+comprobar_texto("base64 de vacío", codificacion.base64_codificar(""), "")
+
+comprobar_texto("hex de 'AB'", codificacion.hex_codificar("AB"), "4142")
+comprobar_texto("hex roundtrip", ok(codificacion.hex_decodificar(codificacion.hex_codificar("hola"))), "hola")
+
+comprobar_texto("url de espacio", codificacion.url_codificar("a b"), "a%20b")
+comprobar_texto("url roundtrip", ok(codificacion.url_decodificar(codificacion.url_codificar("a b&c"))), "a b&c")
+
+resumen()
