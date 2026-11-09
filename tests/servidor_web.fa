@@ -54,6 +54,15 @@ variable r4 = servidor_web.error_respuesta(nuevo RespuestaHTTP(), 404)
 comprobar_igual("error_respuesta: código", r4.codigo, 404)
 comprobar("error_respuesta: cuerpo no vacío", longitud(r4.cuerpo) > 0)
 
+# ─── Lectura del cuerpo ────────────────────────────────────────────
+comprobar_igual("Content-Length simple", servidor_web._longitud_de_cuerpo(
+    "POST /x HTTP/1.1" + "\r\n" + "Content-Length: 5" + "\r\n" + "X: y" + "\r\n"
+), 5)
+comprobar_igual("Content-Length en minúsculas", servidor_web._longitud_de_cuerpo(
+    "POST /x HTTP/1.1" + "\r\n" + "content-length: 1234" + "\r\n"
+), 1234)
+comprobar_igual("sin Content-Length es 0", servidor_web._longitud_de_cuerpo("GET / HTTP/1.1" + "\r\n" + "Host: x" + "\r\n"), 0)
+
 # ─── Cookies ───────────────────────────────────────────────────────
 variable cookies = servidor_web._parsear_cookies("a=1; b=dos")
 comprobar_texto("cookie a", cookies["a"], "1")

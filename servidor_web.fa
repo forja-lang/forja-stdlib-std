@@ -125,6 +125,75 @@ funcion _parsear_cookies(texto_cookie: Texto) {
     retornar cookies
 }
 
+# ─── Lectura completa del request ───────────────────────────────────
+#
+# Antes se hacía una sola `_socket_recibir(8192)`: si el request llegaba
+# partido en dos paquetes TCP o el cuerpo pesaba más de 8 KiB, se parseaba
+# truncado. Acá se lee hasta el fin de cabeceras y después hasta completar
+# el `Content-Length`, con tope en `_max_cuerpo`.
+
+funcion _longitud_de_cuerpo(cabeceras_texto: Texto) -> Entero {
+    variable lineas = dividir(cabeceras_texto, "\n")
+    variable i = 1
+    mientras (i < longitud(lineas)) {
+        variable linea = recortar(lineas[i])
+        si (empieza_con(a_minusculas(linea), "content-length:")) {
+            variable valor = recortar(subcadena(linea, 15, longitud(linea) - 15))
+            variable n = a_entero(valor)
+            si (n != nulo) {
+                retornar n
+            }
+            retornar 0
+        }
+        i = i + 1
+    }
+    retornar 0
+}
+
+# Lee el request completo. Devuelve nulo si no hay datos o si se excede el tope.
+funcion _leer_solicitud(socket, max_cuerpo: Entero) {
+    variable datos = ""
+    variable fin_cabeceras = -1
+    variable cuerpo_esperado = 0
+    variable iteraciones = 0
+
+    mientras (verdadero) {
+        variable trozo = _socket_recibir(socket, BUFFER_LECTURA)
+        si (trozo == nulo || trozo == "") {
+            romper
+        }
+        datos = datos + trozo
+
+        si (fin_cabeceras < 0) {
+            fin_cabeceras = indice_de(datos, "\r\n\r\n")
+            si (fin_cabeceras >= 0) {
+                variable cabeceras_texto = subcadena(datos, 0, fin_cabeceras)
+                cuerpo_esperado = _longitud_de_cuerpo(cabeceras_texto)
+                si (cuerpo_esperado > max_cuerpo) {
+                    retornar nulo
+                }
+            }
+        }
+
+        si (fin_cabeceras >= 0) {
+            variable cuerpo_recibido = longitud(datos) - (fin_cabeceras + 4)
+            si (cuerpo_recibido >= cuerpo_esperado) {
+                romper
+            }
+        }
+
+        iteraciones = iteraciones + 1
+        si (iteraciones > 4096) {
+            romper
+        }
+    }
+
+    si (longitud(datos) == 0) {
+        retornar nulo
+    }
+    retornar datos
+}
+
 # ─── Funciones de creacion de respuestas ────────────────────────────
 
 funcion html(respuesta, contenido: Texto) {
@@ -446,7 +515,9 @@ funcion iniciar(servidor) {
             continuar
         }
 
-        variable datos = _socket_recibir(cliente, BUFFER_LECTURA)
+        # Timeout de 10 s para no quedar colgado con un cliente lento.
+        _socket_fijar_timeout(cliente, 10000)
+        variable datos = _leer_solicitud(cliente, servidor._max_cuerpo)
         si (datos == nulo) {
             _socket_cerrar(cliente)
             continuar
