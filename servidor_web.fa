@@ -7,6 +7,7 @@
 #       proporcionadas por la VM de Forja.
 
 importar "std/colecciones"
+importar "std/log"
 
 # ─── Constantes HTTP ────────────────────────────────────────────────
 constante BUFFER_LECTURA = 8192
@@ -470,6 +471,7 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     }
 
     _enviar_respuesta(socket, respuesta)
+    informacion(metodo + " " + ruta + " -> " + a_texto(respuesta.codigo))
 }
 
 # ─── Envio de respuestas ────────────────────────────────────────────
@@ -501,8 +503,13 @@ funcion _enviar_respuesta(socket, respuesta) {
 
 funcion iniciar(servidor) {
     servidor._corriendo = verdadero
-    imprimir("Servidor web Forja iniciado en http://" + servidor._host + ":" + a_texto(servidor._puerto) + "/")
-    imprimir("Presiona Ctrl+C para detener")
+    # Se registra por stderr (`_log_escribir`), no con `imprimir`: la salida de
+    # `imprimir` se acumula y recién se vuelca al terminar, y un servidor no
+    # termina nunca (los logs no se verían).
+    # Nota: se llama sin calificar porque `log.informacion(...)` no resuelve
+    # dentro de otro módulo (ver N14 en plans/PLAN_WEB_Y_GUI.md).
+    informacion("Servidor web Forja iniciado en http://" + servidor._host + ":" + a_texto(servidor._puerto) + "/")
+    informacion("Presiona Ctrl+C para detener")
 
     variable servidor_socket = _socket_tcp_escuchar(servidor._puerto, 128)
     si (servidor_socket == nulo) {

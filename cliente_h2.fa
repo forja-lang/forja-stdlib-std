@@ -97,7 +97,7 @@ funcion _cabeceras_a_texto(cabeceras) -> Texto {
         partes = partes + [lista_claves[i], cabeceras[lista_claves[i]]]
         i = i + 1
     }
-    retornar unir(partes, "|")
+    retornar unir_elementos(partes, "|")
 }
 
 funcion _texto_a_mapa(texto: Texto) {
