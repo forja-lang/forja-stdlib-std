@@ -1,0 +1,21 @@
+# Tests de std/archivo (usa un archivo temporal en el directorio actual).
+importar "std/archivo"
+importar "std/ruta"
+importar "std/tests/arnes"
+
+variable ruta_prueba = "forja_test_archivo.txt"
+
+comprobar("escritura", ok(archivo.escribir_archivo(ruta_prueba, "hola\nmundo")))
+comprobar("existe_archivo", ok(archivo.existe_archivo(ruta_prueba)))
+comprobar_texto("lectura", ok(archivo.leer_archivo(ruta_prueba)), "hola\nmundo")
+comprobar_igual("tamano_archivo", ok(archivo.tamano_archivo(ruta_prueba)), 10)
+
+comprobar("copia", ok(archivo.copiar_archivo(ruta_prueba, "forja_test_copia.txt")))
+comprobar("la copia existe", ok(archivo.existe_archivo("forja_test_copia.txt")))
+
+comprobar("eliminar copia", ok(archivo.eliminar_archivo("forja_test_copia.txt")))
+comprobar("la copia ya no existe", !ok(archivo.existe_archivo("forja_test_copia.txt")))
+comprobar("eliminar original", ok(archivo.eliminar_archivo(ruta_prueba)))
+comprobar("leer un archivo inexistente devuelve error", ok(archivo.leer_archivo("no_existe_esto.txt")) == nulo)
+
+resumen()

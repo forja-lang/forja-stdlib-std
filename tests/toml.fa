@@ -1,0 +1,16 @@
+# Tests de std/toml.
+importar "std/toml"
+importar "std/tests/arnes"
+
+variable mapa = ok(toml.parsear("nombre = \"forja\"\nversion = 3\n"))
+comprobar_texto("parsear: texto", mapa["nombre"], "forja")
+comprobar_igual("parsear: entero", mapa["version"], 3)
+
+variable texto = ok(toml.generar({"nombre": "forja"}))
+comprobar("generar incluye la clave", contiene(texto, "nombre"))
+comprobar("generar incluye el valor", contiene(texto, "forja"))
+
+variable vuelta = ok(toml.parsear(texto))
+comprobar_texto("roundtrip", vuelta["nombre"], "forja")
+
+resumen()

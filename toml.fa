@@ -13,10 +13,12 @@ clase ErrorToml {
     }
 }
 
+# Nota: los nativos devuelven el valor crudo (mapa / texto), no un Resultado.
+# Envolver en `Ok` mantiene el contrato que declara la firma.
 funcion parsear(texto: Texto) -> Resultado<Mapa<Texto>, ErrorToml> {
-    retornar _toml_parsear(texto);
+    retornar Ok(_toml_parsear(texto));
 }
 
 funcion generar(mapa: Mapa<Texto>) -> Resultado<Texto, ErrorToml> {
-    retornar _toml_generar(mapa);
+    retornar Ok(_toml_generar(mapa));
 }
