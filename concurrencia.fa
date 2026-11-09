@@ -157,35 +157,22 @@ funcion reintentar(max_intentos: Entero, callback) {
 # Retorna un arreglo con los resultados (orden original).
 #
 funcion mapa_async(arr: Arreglo, callback: Funcion) -> Arreglo {
+    # Los `hilo` de Forja clonan la VM y el montículo: un callback (closure)
+    # dentro de un hilo no ve el entorno del que lo creó y devuelve nulo.
+    # shortcut: secuencial hasta que exista estado compartido entre hilos
+    # (ver N11 en plans/PLAN_WEB_Y_GUI.md); cuando exista, volver a paralelizar.
     variable n = longitud(arr)
     variable resultados = []
-    variable futures = []
-
-    # Pre-dimensionar arreglos
     variable k = 0
     mientras (k < n) {
         resultados[k] = nulo
         k = k + 1
     }
-
-    # Lanzar un hilo por elemento
     variable i = 0
     mientras (i < n) {
-        variable valor = arr[i]
-        futures[i] = hilo {
-            variable r = callback(valor)
-            retornar r
-        }
+        resultados[i] = callback(arr[i])
         i = i + 1
     }
-
-    # Recoger resultados en orden
-    variable j = 0
-    mientras (j < n) {
-        resultados[j] = futures[j].unir()
-        j = j + 1
-    }
-
     retornar resultados
 }
 
@@ -197,35 +184,21 @@ funcion mapa_async(arr: Arreglo, callback: Funcion) -> Arreglo {
 # usando hilos reales. Retorna arreglo con resultados.
 #
 funcion paralelo_for_async(inicio: Entero, fin: Entero, callback: Funcion) -> Arreglo {
+    # Misma limitación que `mapa_async`: los hilos no comparten el entorno de
+    # los closures, así que por ahora se ejecuta en orden.
+    # shortcut: secuencial hasta que haya estado compartido entre hilos (N11).
     variable n = fin - inicio
     variable resultados = []
-    variable futures = []
-
-    # Pre-dimensionar arreglos
     variable k = 0
     mientras (k < n) {
         resultados[k] = nulo
         k = k + 1
     }
-
-    # Lanzar un hilo por iteración
     variable i = inicio
     mientras (i < fin) {
-        variable idx = i
-        futures[i - inicio] = hilo {
-            variable r = callback(idx)
-            retornar r
-        }
+        resultados[i - inicio] = callback(i)
         i = i + 1
     }
-
-    # Recoger resultados en orden
-    variable j = 0
-    mientras (j < n) {
-        resultados[j] = futures[j].unir()
-        j = j + 1
-    }
-
     retornar resultados
 }
 
@@ -240,6 +213,9 @@ funcion paralelo_for_async(inicio: Entero, fin: Entero, callback: Funcion) -> Ar
 #   - tx_tareas:      canal para enviar tareas
 #   - rx_resultados:  canal para recibir resultados
 #
+#
+# OJO: depende de compartir canales entre hilos, que hoy no funciona de forma
+# confiable (los hilos clonan la VM). Ver N11 en plans/PLAN_WEB_Y_GUI.md.
 funcion pool_async(num_trabajadores: Entero, procesar: Funcion) -> Arreglo {
     variable tx_tareas, rx_tareas = canal()
     variable tx_resultados, rx_resultados = canal()
