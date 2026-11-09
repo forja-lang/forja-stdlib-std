@@ -1,0 +1,25 @@
+# Tests de std/resultado (helpers de Resultado/Opcion).
+importar "std/resultado"
+importar "std/tests/arnes"
+
+comprobar("es_ok(Ok)", resultado.es_ok(Ok(1)))
+comprobar("es_ok(Error) es falso", !resultado.es_ok(Error("x")))
+comprobar("es_error(Error)", resultado.es_error(Error("x")))
+comprobar("es_error(Ok) es falso", !resultado.es_error(Ok(1)))
+comprobar("es_ok(Alguno)", resultado.es_ok(Alguno(1)))
+comprobar("es_ok(Ninguno) es falso", !resultado.es_ok(Ninguno()))
+
+comprobar_igual("desenvolver(Ok)", resultado.desenvolver(Ok(7)), 7)
+comprobar("desenvolver(Error) es nulo", resultado.desenvolver(Error("x")) == nulo)
+comprobar_igual("desenvolver_o(Error, 9)", resultado.desenvolver_o(Error("x"), 9), 9)
+comprobar_igual("desenvolver_o(Ok(1), 9)", resultado.desenvolver_o(Ok(1), 9), 1)
+
+# El operador `?` desenvuelve dentro de una función que devuelve Resultado
+funcion sumar(a, b) -> Resultado<Entero, Texto> {
+    variable x = Ok(a)?
+    variable y = Ok(b)?
+    retornar Ok(x + y)
+}
+comprobar_igual("? desenvuelve y opera", resultado.desenvolver(sumar(2, 3)), 5)
+
+resumen()

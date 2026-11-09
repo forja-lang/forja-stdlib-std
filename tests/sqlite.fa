@@ -1,0 +1,57 @@
+# Tests de std/sqlite: CRUD, parámetros y transacciones.
+importar "std/sqlite"
+importar "std/tests/arnes"
+
+# `sqlite.*` devuelve Resultado: los tests desenvuelven con este helper.
+funcion ok(v) {
+    coincidir (v) {
+        caso Ok(x) -> { retornar x }
+        caso _ -> { retornar nulo }
+    }
+}
+
+variable ruta = "forja_test_sqlite.db"
+variable db = ok(sqlite.abrir(ruta))
+comprobar("abrir base", db != nulo)
+comprobar("la base devuelve un índice", tipo(db) == "entero")
+
+comprobar("DROP", ok(sqlite.ejecutar(db, "DROP TABLE IF EXISTS tareas")))
+comprobar("CREATE", ok(sqlite.ejecutar(db, "CREATE TABLE tareas (id INTEGER PRIMARY KEY, titulo TEXT NOT NULL, hecha INTEGER DEFAULT 0)")))
+comprobar("INSERT sin parámetros", ok(sqlite.ejecutar(db, "INSERT INTO tareas (titulo) VALUES ('primera')")))
+comprobar("INSERT con parámetros", ok(sqlite.ejecutar_con_parametros(db, "INSERT INTO tareas (titulo, hecha) VALUES (?, ?)", ["segunda", 1])))
+comprobar("el último id avanza", ok(sqlite.ultimo_id(db)) >= 2)
+
+variable todas = ok(sqlite.consultar(db, "SELECT id, titulo FROM tareas ORDER BY id"))
+comprobar_igual("SELECT devuelve 2 filas", longitud(todas), 2)
+
+variable una = ok(sqlite.consultar_una(db, "SELECT titulo FROM tareas WHERE id = 1"))
+comprobar("SELECT una fila devuelve algo", una != nulo)
+
+variable filtradas = ok(sqlite.consultar_con_parametros(db, "SELECT titulo FROM tareas WHERE hecha = ?", [1]))
+comprobar_igual("SELECT con parámetros devuelve 1", longitud(filtradas), 1)
+
+# ─── Transacción que confirma ──────────────────────────────────────
+ok(sqlite.transaccion(db))
+ok(sqlite.ejecutar(db, "INSERT INTO tareas (titulo) VALUES ('confirmada')"))
+comprobar("COMMIT", ok(sqlite.confirmar(db)))
+comprobar_igual("la fila confirmada está", longitud(ok(sqlite.consultar_con_parametros(db, "SELECT id FROM tareas WHERE titulo = ?", ["confirmada"]))), 1)
+
+# ─── Transacción que revierte ──────────────────────────────────────
+ok(sqlite.transaccion(db))
+ok(sqlite.ejecutar(db, "INSERT INTO tareas (titulo) VALUES ('revertida')"))
+comprobar("ROLLBACK", ok(sqlite.deshacer(db)))
+comprobar_igual("la fila revertida no está", longitud(ok(sqlite.consultar_con_parametros(db, "SELECT id FROM tareas WHERE titulo = ?", ["revertida"]))), 0)
+
+# ─── Introspección ────────────────────────────────────────────────
+# Ojo: no uses `variable tablas = sqlite.tablas(...)`. El nombre que se está
+# declarando tapa al miembro del módulo dentro de su propio inicializador.
+variable lista_tablas = ok(sqlite.tablas(db))
+comprobar("tablas incluye tareas", contiene(a_texto(lista_tablas), "tareas"))
+variable lista_columnas = ok(sqlite.columnas(db, "tareas"))
+comprobar("columnas no vacío", longitud(lista_columnas) >= 3)
+comprobar("una columna se llama titulo", contiene(a_texto(lista_columnas), "titulo"))
+
+ok(sqlite.ejecutar(db, "DROP TABLE IF EXISTS tareas"))
+sqlite.cerrar(db)
+
+resumen()

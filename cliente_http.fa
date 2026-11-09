@@ -6,6 +6,7 @@
 # Nota: Usa funciones nativas _http_* y _socket_*
 
 # ─── Clase RespuestaCliente ─────────────────────────────────────────
+importar "std/colecciones"
 clase RespuestaCliente {
     codigo
     status
@@ -62,10 +63,10 @@ clase OpcionesCliente {
 
 funcion _cabeceras_a_texto(cabeceras) -> Texto {
     variable partes = []
-    variable claves = claves_mapa(cabeceras)
+    variable lista_claves = claves(cabeceras)
     variable i = 0
-    mientras (i < longitud(claves)) {
-        partes = partes + [claves[i], cabeceras[claves[i]]]
+    mientras (i < longitud(lista_claves)) {
+        partes = partes + [lista_claves[i], cabeceras[lista_claves[i]]]
         i = i + 1
     }
     retornar unir(partes, "|")
@@ -153,10 +154,10 @@ funcion _realizar_solicitud(metodo: Texto, url: Texto, cuerpo: Texto, opciones) 
         cabeceras["Connection"] = "close"
     }
 
-    variable claves_user = claves_mapa(opciones.cabeceras)
+    variable lista_claves_user = claves(opciones.cabeceras)
     variable i = 0
-    mientras (i < longitud(claves_user)) {
-        cabeceras[claves_user[i]] = opciones.cabeceras[claves_user[i]]
+    mientras (i < longitud(lista_claves_user)) {
+        cabeceras[lista_claves_user[i]] = opciones.cabeceras[lista_claves_user[i]]
         i = i + 1
     }
 

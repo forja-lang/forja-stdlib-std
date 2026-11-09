@@ -198,45 +198,46 @@ funcion segmento(arr, inicio, fin) {
 # MAPA — Operaciones
 # ═══════════════════════════════════════════════════════════════
 #
-# NOTA: Las funciones sobre mapas requieren soporte de iteración
-# nativa sobre mapas en el runtime de Forja. Actualmente los mapas
-# soportan acceso por clave (mapa["clave"]) y asignación, pero no
-# enumeración programática de claves. Estas funciones están definidas
-# para completitud de la API y funcionarán cuando el runtime agregue
-# iteración de mapas.
+# La enumeración de mapas la resuelven los nativos `_mapa_claves`,
+# `_mapa_valores` y `_mapa_pares` (ordenadas por clave, para que el
+# resultado sea estable y testeable).
 
-# Retorna las claves del mapa como un arreglo.
-# Ejemplo: claves({"a":1, "b":2}) → ["a", "b"]
+# Retorna las claves del mapa como un arreglo ordenado.
+# Ejemplo: claves({"b":1, "a":2}) → ["a", "b"]
 funcion claves(mapa) {
-    # NOTA: requiere iteración nativa sobre mapas.
-    # Por ahora retorna arreglo vacío.
-    variable res = []
-    retornar res
+    retornar _mapa_claves(mapa)
 }
 
-# Retorna los valores del mapa como un arreglo.
-# Ejemplo: valores({"a":1, "b":2}) → [1, 2]
+# Retorna los valores del mapa, en el mismo orden que `claves`.
+# Ejemplo: valores({"b":1, "a":2}) → [2, 1]
 funcion valores(mapa) {
-    # NOTA: requiere iteración nativa sobre mapas.
-    variable res = []
-    retornar res
+    retornar _mapa_valores(mapa)
 }
 
-# Retorna los pares [clave, valor] como arreglo de arreglos.
-# Ejemplo: pares({"a":1, "b":2}) → [["a",1], ["b",2]]
+# Retorna los pares [clave, valor] como arreglo de arreglos, ordenado por clave.
+# Ejemplo: pares({"b":1, "a":2}) → [["a",2], ["b",1]]
 funcion pares(mapa) {
-    # NOTA: requiere iteración nativa sobre mapas.
-    variable res = []
-    retornar res
+    retornar _mapa_pares(mapa)
 }
 
 # Combina dos mapas en uno nuevo.
 # Si ambos mapas tienen la misma clave, el valor de mapa2 prevalece.
 # Ejemplo: fusionar({"a":1}, {"b":2}) → {"a":1, "b":2}
 funcion fusionar(mapa1, mapa2) {
-    # NOTA: requiere iteración nativa sobre mapas.
-    # Por ahora retorna un mapa vacío.
-    retornar {}
+    variable res = {}
+    variable i = 0
+    variable p1 = pares(mapa1)
+    mientras (i < longitud(p1)) {
+        res[p1[i][0]] = p1[i][1]
+        i = i + 1
+    }
+    variable j = 0
+    variable p2 = pares(mapa2)
+    mientras (j < longitud(p2)) {
+        res[p2[j][0]] = p2[j][1]
+        j = j + 1
+    }
+    retornar res
 }
 
 # Filtra un mapa por sus claves.
@@ -244,6 +245,55 @@ funcion fusionar(mapa1, mapa2) {
 # callback(clave) retorna verdadero.
 # Ejemplo: filtrar_claves({"a":1, "b":2, "c":3}, func(k) { k != "b" }) → {"a":1, "c":3}
 funcion filtrar_claves(mapa, callback) {
-    # NOTA: requiere iteración nativa sobre mapas.
-    retornar {}
+    variable res = {}
+    variable i = 0
+    variable p = pares(mapa)
+    mientras (i < longitud(p)) {
+        si (callback(p[i][0])) {
+            res[p[i][0]] = p[i][1]
+        }
+        i = i + 1
+    }
+    retornar res
+}
+
+# Compara dos valores por contenido (los arreglos y mapas se comparan
+# estructuralmente; `==` en Forja compara identidad).
+# Ejemplo: iguales([1, [2]], [1, [2]]) → verdadero
+funcion iguales(a, b) {
+    si (a == b) {
+        retornar verdadero
+    }
+    si (a == nulo || b == nulo) {
+        retornar falso
+    }
+    si (tipo(a) == "arreglo" && tipo(b) == "arreglo") {
+        si (longitud(a) != longitud(b)) {
+            retornar falso
+        }
+        variable i = 0
+        mientras (i < longitud(a)) {
+            si (!iguales(a[i], b[i])) {
+                retornar falso
+            }
+            i = i + 1
+        }
+        retornar verdadero
+    }
+    si (tipo(a) == "mapa" && tipo(b) == "mapa") {
+        variable ka = claves(a)
+        variable kb = claves(b)
+        si (!iguales(ka, kb)) {
+            retornar falso
+        }
+        variable i = 0
+        mientras (i < longitud(ka)) {
+            si (!iguales(a[ka[i]], b[ka[i]])) {
+                retornar falso
+            }
+            i = i + 1
+        }
+        retornar verdadero
+    }
+    retornar falso
 }

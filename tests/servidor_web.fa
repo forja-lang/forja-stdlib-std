@@ -1,0 +1,62 @@
+# Tests de std/servidor_web: router, respuestas y helpers de cabeceras.
+importar "std/servidor_web"
+importar "std/tests/arnes"
+
+variable servidor = nuevo ServidorWeb(0)
+servidor_web.registrar_obtener(servidor, "/", func(peticion, respuesta) {
+    retornar servidor_web.html(respuesta, "inicio")
+})
+servidor_web.registrar_obtener(servidor, "/tarea/:id", func(peticion, respuesta) {
+    retornar servidor_web.texto_plano(respuesta, peticion.params_ruta["id"])
+})
+servidor_web.enviar(servidor, "/solo-post", func(peticion, respuesta) {
+    retornar servidor_web.texto_plano(respuesta, "post")
+})
+
+# ─── Router ────────────────────────────────────────────────────────
+variable r_inicio = servidor_web._resolver_ruta(servidor, "GET", "/")
+comprobar("ruta exacta encontrada", r_inicio != nulo)
+comprobar("ruta exacta sin params", iguales(r_inicio["params"], {}))
+
+variable r_param = servidor_web._resolver_ruta(servidor, "GET", "/tarea/42")
+comprobar("ruta con parámetro encontrada", r_param != nulo)
+comprobar_texto("parámetro capturado", r_param["params"]["id"], "42")
+
+variable r_post = servidor_web._resolver_ruta(servidor, "POST", "/solo-post")
+comprobar("método distinto resuelve", r_post != nulo)
+comprobar("ruta POST no matchea GET", servidor_web._resolver_ruta(servidor, "GET", "/solo-post") == nulo)
+comprobar("ruta desconocida devuelve nulo", servidor_web._resolver_ruta(servidor, "GET", "/nada") == nulo)
+comprobar("prefijo no matchea", servidor_web._resolver_ruta(servidor, "GET", "/tarea/42/extra") == nulo)
+
+# ─── Cabeceras ─────────────────────────────────────────────────────
+variable cabeceras = {"Content-Type": "text/html", "X-Test": "1"}
+variable texto_cabeceras = servidor_web._cabeceras_a_texto(cabeceras)
+variable vuelta = servidor_web._texto_a_mapa(texto_cabeceras)
+comprobar_texto("cabeceras: Content-Type sobrevive", vuelta["Content-Type"], "text/html")
+comprobar_texto("cabeceras: X-Test sobrevive", vuelta["X-Test"], "1")
+comprobar_igual("cabeceras: misma cantidad", longitud(claves(vuelta)), 2)
+
+# ─── Construcción de respuestas ────────────────────────────────────
+variable r1 = servidor_web.html(nuevo RespuestaHTTP(), "<h1>x</h1>")
+comprobar_texto("html: tipo de contenido", r1.tipo_contenido, "text/html; charset=utf-8")
+comprobar_texto("html: cuerpo", r1.cuerpo, "<h1>x</h1>")
+comprobar_texto("html: cabecera", r1.cabeceras["Content-Type"], "text/html; charset=utf-8")
+
+variable r2 = servidor_web.texto_plano(nuevo RespuestaHTTP(), "ok")
+comprobar_texto("texto_plano: tipo", r2.tipo_contenido, "text/plain; charset=utf-8")
+comprobar_igual("texto_plano: código 200 por defecto", r2.codigo, 200)
+
+variable r3 = servidor_web.redirigir(nuevo RespuestaHTTP(), "/otra")
+comprobar_igual("redirigir: 302", r3.codigo, 302)
+comprobar_texto("redirigir: Location", r3.cabeceras["Location"], "/otra")
+
+variable r4 = servidor_web.error_respuesta(nuevo RespuestaHTTP(), 404)
+comprobar_igual("error_respuesta: código", r4.codigo, 404)
+comprobar("error_respuesta: cuerpo no vacío", longitud(r4.cuerpo) > 0)
+
+# ─── Cookies ───────────────────────────────────────────────────────
+variable cookies = servidor_web._parsear_cookies("a=1; b=dos")
+comprobar_texto("cookie a", cookies["a"], "1")
+comprobar_texto("cookie b", cookies["b"], "dos")
+
+resumen()

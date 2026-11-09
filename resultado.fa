@@ -14,7 +14,8 @@
 // sea `Resultado` u `Opcion`.
 //
 // Este módulo aporta helpers para inspeccionar esos valores sin escribir un
-// `coincidir` explícito. El parámetro de entrada es genérico (puede ser
+// `coincidir` explícito.
+// El parámetro de entrada es genérico (puede ser
 // `Resultado` u `Opcion`), por eso el patrón comodín cubre el resto.
 
 // ¿El valor es un éxito (`Ok`/`Alguno`)?

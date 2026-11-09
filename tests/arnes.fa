@@ -1,0 +1,47 @@
+# arnes — mini harness de aserciones para los tests de la stdlib.
+#
+# Uso:
+#   importar "std/tests/arnes"
+#   comprobar("descripción", condicion)
+#   comprobar_igual("descripción", obtenido, esperado)
+#   resumen()        # imprime el resumen y sale con código 1 si hubo fallas
+#
+# Existe porque `forja test` transpila a Rust y los módulos de la stdlib usan
+# nativos; estos tests se ejecutan con la VM (`forja run`).
+
+importar "std/colecciones"
+
+variable _pruebas = 0
+variable _fallas = 0
+
+funcion comprobar(nombre: Texto, condicion) {
+    _pruebas = _pruebas + 1
+    si (!condicion) {
+        _fallas = _fallas + 1
+        escribir("  FALLA: " + nombre)
+    }
+}
+
+funcion comprobar_igual(nombre: Texto, obtenido, esperado) {
+    _pruebas = _pruebas + 1
+    si (!iguales(obtenido, esperado)) {
+        _fallas = _fallas + 1
+        escribir("  FALLA: " + nombre + " (obtenido: " + a_texto(obtenido) + ", esperado: " + a_texto(esperado) + ")")
+    }
+}
+
+funcion comprobar_texto(nombre: Texto, obtenido, esperado: Texto) {
+    _pruebas = _pruebas + 1
+    si (a_texto(obtenido) != esperado) {
+        _fallas = _fallas + 1
+        escribir("  FALLA: " + nombre + " (obtenido: '" + a_texto(obtenido) + "', esperado: '" + esperado + "')")
+    }
+}
+
+funcion resumen() {
+    escribir("  " + a_texto(_pruebas) + " pruebas, " + a_texto(_fallas) + " fallas")
+    si (_fallas > 0) {
+        _salir(1)
+    }
+    _salir(0)
+}

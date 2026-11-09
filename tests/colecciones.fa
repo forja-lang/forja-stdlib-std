@@ -1,0 +1,23 @@
+# Tests de std/colecciones (se ejecutan con la VM).
+importar "std/colecciones"
+importar "std/tests/arnes"
+
+variable m = {"b": 2, "a": 1, "c": 3}
+comprobar_igual("claves ordenadas", claves(m), ["a", "b", "c"])
+comprobar_igual("valores en el orden de claves", valores(m), [1, 2, 3])
+comprobar_igual("pares", pares(m), [["a", 1], ["b", 2], ["c", 3]])
+comprobar_igual("claves de mapa vacío", claves({}), [])
+comprobar_igual("fusionar: gana el segundo", fusionar({"a": 1}, {"a": 9, "b": 2}), {"a": 9, "b": 2})
+comprobar_igual("filtrar_claves", filtrar_claves(m, func(k) { retornar k != "b" }), {"a": 1, "c": 3})
+
+comprobar_igual("mapa", mapa([1, 2, 3], func(x) { retornar x * 2 }), [2, 4, 6])
+comprobar_igual("filtrar", filtrar([1, 2, 3], func(x) { retornar x > 1 }), [2, 3])
+comprobar_igual("reducir", reducir([1, 2, 3], func(a, b) { retornar a + b }, 0), 6)
+comprobar("alguno", alguno([1, 2, 3], func(x) { retornar x == 2 }))
+comprobar("todos", todos([1, 2, 3], func(x) { retornar x > 0 }))
+comprobar_igual("unico", unico([1, 1, 2, 3, 3]), [1, 2, 3])
+comprobar_igual("aplanar", aplanar([[1, 2], [3]]), [1, 2, 3])
+comprobar_igual("segmento", segmento([1, 2, 3, 4], 1, 3), [2, 3])
+comprobar_igual("encontrar", encontrar([1, 2, 3], func(x) { retornar x == 2 }), 2)
+
+resumen()

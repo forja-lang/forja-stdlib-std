@@ -6,6 +6,8 @@
 # Nota: Este modulo usa funciones nativas _http_* y _socket_*
 #       proporcionadas por la VM de Forja.
 
+importar "std/colecciones"
+
 # ─── Constantes HTTP ────────────────────────────────────────────────
 constante BUFFER_LECTURA = 8192
 
@@ -89,10 +91,10 @@ clase ServidorWeb {
 
 funcion _cabeceras_a_texto(cabeceras) -> Texto {
     variable partes = []
-    variable claves = claves_mapa(cabeceras)
+    variable lista_claves = claves(cabeceras)
     variable i = 0
-    mientras (i < longitud(claves)) {
-        partes = partes + [claves[i], cabeceras[claves[i]]]
+    mientras (i < longitud(lista_claves)) {
+        partes = partes + [lista_claves[i], cabeceras[lista_claves[i]]]
         i = i + 1
     }
     retornar unir_elementos(partes, "|")
@@ -236,12 +238,12 @@ funcion _resolver_ruta(servidor, metodo: Texto, ruta: Texto) {
 
     variable rutas_params = servidor._rutas_params[metodo]
     si (rutas_params != nulo) {
-        variable claves = claves_mapa(rutas_params)
+        variable lista_claves = claves(rutas_params)
         variable i = 0
-        mientras (i < longitud(claves)) {
-            variable info = rutas_params[claves[i]]
+        mientras (i < longitud(lista_claves)) {
+            variable info = rutas_params[lista_claves[i]]
             variable partes_ruta = dividir(ruta, "/")
-            variable partes_clave = dividir(claves[i], "/")
+            variable partes_clave = dividir(lista_claves[i], "/")
 
             si (longitud(partes_ruta) == longitud(partes_clave)) {
                 variable params_encontrados = {}
@@ -339,7 +341,7 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     variable manejador = nulo
 
     si (ruta_info == nulo) {
-        variable claves_static = claves_mapa(servidor._static_rutas)
+        variable claves_static = claves(servidor._static_rutas)
         variable i = 0
         mientras (i < longitud(claves_static)) {
             variable prefijo = claves_static[i]
@@ -370,7 +372,7 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     variable j = 0
     mientras (j < longitud(servidor._middlewares) && ejecutar) {
         variable mw = servidor._middlewares[j]
-        variable res_mw = mw(solicitud)
+        variable res_mw = mw(solicitud, respuesta)
         si (res_mw != nulo) {
             respuesta = res_mw
             ejecutar = falso
@@ -379,7 +381,12 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     }
 
     si (ejecutar && manejador != nulo) {
-        respuesta = manejador(solicitud)
+        # El manejador puede mutar `respuesta` (estilo `html(respuesta, ...)`) o
+        # devolver una respuesta nueva (estilo `retornar RespuestaHTTP()`).
+        variable devuelta = manejador(solicitud, respuesta)
+        si (devuelta != nulo) {
+            respuesta = devuelta
+        }
     }
 
     si (servidor._cors) {
@@ -403,7 +410,7 @@ funcion _enviar_respuesta(socket, respuesta) {
     cabeceras_mapa["Server"] = "Forja-Web/1.0"
     cabeceras_mapa["Connection"] = "close"
 
-    variable fecha = _http_fecha_texto(0)
+    variable fecha = _http_fecha_texto()
     si (fecha != -1) {
         cabeceras_mapa["Date"] = fecha
     }

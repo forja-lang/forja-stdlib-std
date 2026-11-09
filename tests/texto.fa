@@ -1,0 +1,28 @@
+# Tests de std/texto.
+importar "std/texto"
+importar "std/tests/arnes"
+
+comprobar_texto("capitalizar", texto.capitalizar("hola mundo"), "Hola mundo")
+comprobar_texto("capitalizar vacío", texto.capitalizar(""), "")
+comprobar("esta_vacio", texto.esta_vacio(""))
+comprobar("no esta_vacio", !texto.esta_vacio("x"))
+comprobar_igual("contar_ocurrencias", texto.contar_ocurrencias("a-a-a", "-"), 2)
+comprobar_igual("contar_ocurrencias sin match", texto.contar_ocurrencias("abc", "-"), 0)
+comprobar_texto("repetir_texto", texto.repetir_texto("ab", 3), "ababab")
+comprobar_texto("repetir_texto 0", texto.repetir_texto("ab", 0), "")
+
+# Builtins de texto (no dependen del módulo, quedan cubiertos acá)
+comprobar_texto("recortar", recortar("  hola  "), "hola")
+comprobar_texto("dividir", dividir("a,b,c", ",")[1], "b")
+comprobar_igual("longitud", longitud("hola"), 4)
+comprobar("contiene", contiene("hola mundo", "mundo"))
+comprobar("empieza_con", empieza_con("hola", "ho"))
+comprobar("termina_con", termina_con("hola", "la"))
+comprobar_texto("subcadena", subcadena("hola", 1, 2), "ol")
+comprobar_texto("a_mayusculas", a_mayusculas("abc"), "ABC")
+comprobar_texto("reemplazar", reemplazar("aXa", "X", "b"), "aba")
+comprobar_texto("unir_elementos", unir_elementos(["a", "b"], "-"), "a-b")
+comprobar_igual("indice_de", indice_de("hola", "l"), 2)
+comprobar_texto("invertir", invertir("abc"), "cba")
+
+resumen()

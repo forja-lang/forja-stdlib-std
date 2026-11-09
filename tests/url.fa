@@ -1,0 +1,20 @@
+# Tests de std/url.
+#
+# OJO: `url.parsear` y `url.query_parsear` declaran devolver `Resultado<...>`
+# pero sus nativos devuelven un objeto `URL` y un texto con formato "a|1|b|2"
+# respectivamente. Por eso acá sólo se cubre lo que hoy cumple su contrato.
+importar "std/url"
+importar "std/tests/arnes"
+
+comprobar_texto("codificar espacio", url.codificar("a b"), "a+b")
+comprobar_texto("codificar ampersand", url.codificar("a&b"), "a%26b")
+comprobar_texto("decodificar %20", url.decodificar("a%20b"), "a b")
+comprobar_texto("roundtrip codificar/decodificar", url.decodificar(url.codificar("hola mundo & más")), "hola mundo & más")
+
+variable construida = url.construir("https", "ejemplo.com", 443, "/a", "x=1")
+comprobar("construir incluye esquema", contiene(construida, "https"))
+comprobar("construir incluye host", contiene(construida, "ejemplo.com"))
+comprobar("construir incluye ruta", contiene(construida, "/a"))
+comprobar("construir incluye query", contiene(construida, "x=1"))
+
+resumen()

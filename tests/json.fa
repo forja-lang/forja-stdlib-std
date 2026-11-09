@@ -1,0 +1,36 @@
+# Tests de std/json.
+importar "std/json"
+importar "std/tests/arnes"
+
+funcion desenvolver_json(v) {
+    coincidir (v) {
+        caso Ok(dato) -> { retornar dato }
+        caso _ -> { retornar nulo }
+    }
+}
+
+variable obj = desenvolver_json(json.parsear("{\"a\": 1, \"b\": [1, 2]}"))
+comprobar("parsear objeto", obj != nulo)
+comprobar_igual("parsear campo a", obj["a"], 1)
+comprobar_igual("parsear arreglo anidado", obj["b"], [1, 2])
+
+variable arr = desenvolver_json(json.parsear("[1, \"dos\", true, null]"))
+comprobar_igual("parsear arreglo: largo", longitud(arr), 4)
+comprobar_igual("parsear arreglo: texto", arr[1], "dos")
+comprobar("parsear arreglo: booleano", arr[2] == verdadero)
+comprobar("parsear arreglo: nulo", arr[3] == nulo)
+
+variable texto_json = desenvolver_json(json.serializar({"x": [1, 2]}))
+variable vuelta = desenvolver_json(json.parsear(texto_json))
+comprobar_igual("roundtrip serializar/parsear", vuelta["x"], [1, 2])
+
+funcion es_error_json(v) {
+    coincidir (v) {
+        caso Ok(_) -> { retornar falso }
+        caso _ -> { retornar verdadero }
+    }
+}
+variable malo = json.parsear("{no es json")
+comprobar("JSON inválido devuelve error", es_error_json(malo))
+
+resumen()

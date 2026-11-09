@@ -1,0 +1,17 @@
+# Tests de std/fecha.
+importar "std/fecha"
+importar "std/tests/arnes"
+
+comprobar("ahora no está vacío", longitud(fecha.ahora()) > 0)
+comprobar("hoy no está vacío", longitud(fecha.hoy()) > 0)
+comprobar("hora_actual no está vacía", longitud(fecha.hora_actual()) > 0)
+
+# 2024-03-05 00:00:00 UTC = 1709596800
+variable ts = 1709596800
+comprobar_texto("formatear %Y-%m-%d", fecha.formatear(ts, "%Y-%m-%d"), "2024-03-05")
+comprobar_texto("formatear %H:%M:%S", fecha.formatear(ts, "%H:%M:%S"), "00:00:00")
+
+variable parseado = fecha.parsear("2024-03-05", "%Y-%m-%d")
+comprobar("parsear devuelve un valor", parseado != nulo)
+
+resumen()

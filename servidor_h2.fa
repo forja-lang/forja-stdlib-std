@@ -11,6 +11,7 @@
 #   detener(servidor) - detiene el servidor
 
 # ─── Constantes ───────────────────────────────────────────────────────
+importar "std/colecciones"
 constante H2_FRAME_DATA = 0
 constante H2_FRAME_HEADERS = 1
 constante H2_FRAME_PRIORITY = 2
@@ -117,10 +118,10 @@ clase ServidorH2 {
 
 funcion _cabeceras_a_texto(cabeceras) -> Texto {
     variable partes = []
-    variable claves = claves_mapa(cabeceras)
+    variable lista_claves = claves(cabeceras)
     variable i = 0
-    mientras (i < longitud(claves)) {
-        partes = partes + [claves[i], cabeceras[claves[i]]]
+    mientras (i < longitud(lista_claves)) {
+        partes = partes + [lista_claves[i], cabeceras[lista_claves[i]]]
         i = i + 1
     }
     retornar unir_elementos(partes, "|")
@@ -360,12 +361,12 @@ funcion _h2_resolver_ruta(servidor, solicitud, conn) {
     # Buscar en rutas con parametros
     variable rutas_params = servidor._rutas_params[metodo]
     si (rutas_params != nulo) {
-        variable claves = claves_mapa(rutas_params)
+        variable lista_claves = claves(rutas_params)
         variable i = 0
-        mientras (i < longitud(claves)) {
-            variable info = rutas_params[claves[i]]
+        mientras (i < longitud(lista_claves)) {
+            variable info = rutas_params[lista_claves[i]]
             variable partes_ruta = dividir(ruta, "/")
-            variable partes_clave = dividir(claves[i], "/")
+            variable partes_clave = dividir(lista_claves[i], "/")
 
             si (longitud(partes_ruta) == longitud(partes_clave)) {
                 variable params_encontrados = {}
@@ -424,7 +425,7 @@ funcion _h2_enviar_respuesta(conn, stream_id: Entero, respuesta, end_stream: Log
     }
 
     # Fusionar cabeceras adicionales
-    variable claves_adic = claves_mapa(respuesta.cabeceras)
+    variable claves_adic = claves(respuesta.cabeceras)
     variable i = 0
     mientras (i < longitud(claves_adic)) {
         cabeceras[claves_adic[i]] = respuesta.cabeceras[claves_adic[i]]
