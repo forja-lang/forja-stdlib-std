@@ -22,6 +22,8 @@ clase ErrorJSON {
     }
 }
 
+importar "std/archivo"
+
 # ═════════════════════════════════════════════════════════════════════════
 # Operaciones JSON
 # ═════════════════════════════════════════════════════════════════════════
@@ -52,7 +54,6 @@ funcion serializar(valor) -> Resultado<Texto, ErrorJSON> {
 # Lee un archivo JSON y lo parsea.
 # Retorna Error si el archivo no existe o el JSON es inválido.
 funcion leer_json(ruta: Texto) {
-    importar std/archivo
     variable res_archivo = archivo.leer_archivo(ruta)
     coincidir (res_archivo) {
         caso Ok(contenido) -> {
@@ -66,10 +67,11 @@ funcion leer_json(ruta: Texto) {
 
 # Convierte un valor Forja a JSON y lo escribe en un archivo.
 funcion escribir_json(ruta: Texto, valor) {
-    variable res_str = _json_stringificar(valor)
+    # `serializar` envuelve el nativo en Resultado; usar `_json_stringificar`
+    # directo devolvía el arreglo [codigo, valor] y ningún `caso` matcheaba.
+    variable res_str = serializar(valor)
     coincidir (res_str) {
         caso Ok(texto_json) -> {
-            importar std/archivo
             variable res_archivo = archivo.escribir_archivo(ruta, texto_json)
             coincidir (res_archivo) {
                 caso Ok(_) -> {
