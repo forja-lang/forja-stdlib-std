@@ -1,0 +1,46 @@
+# módulo: compartido
+# Estado compartido entre hilos.
+#
+# Cada `hilo { }` crea una VM nueva y clona el montículo: las variables del
+# hilo principal no se ven desde el hilo y sus cambios no vuelven. Para lo que
+# un servidor necesita compartir (contador de requests, flag de apagado, caché
+# de configuración) este módulo da celdas globales al proceso.
+#
+# Uso:
+#   importar "std/compartido"
+#
+#   variable visitas = compartido.nueva(0)
+#   hilo { compartido.sumar(visitas, 1) }
+#   escribir(a_texto(compartido.valor(visitas)))
+#
+# Sólo se guardan **escalares** (entero, decimal, booleano, nulo): los textos,
+# arreglos y objetos viven en el montículo de cada VM y compartirlos sería
+# inseguro. Para estructuras, guardá JSON y parsealo en cada extremo.
+#
+# Ver B2(c) en plans/PLAN_WEB_Y_GUI.md.
+
+# Crea una celda compartida con un valor inicial escalar y devuelve su handle.
+funcion nueva(valor) {
+    retornar _compartido_nuevo(valor)
+}
+
+# Lee el valor actual de la celda.
+# (Se llama `valor` y no `obtener` porque `obtener` es un builtin del lenguaje.)
+funcion valor(celda) {
+    retornar _compartido_obtener(celda)
+}
+
+# Reemplaza el valor y devuelve el anterior.
+funcion fijar(celda, valor) {
+    retornar _compartido_fijar(celda, valor)
+}
+
+# Suma `delta` de forma atómica y devuelve el valor nuevo.
+funcion sumar(celda, delta) {
+    retornar _compartido_sumar(celda, delta)
+}
+
+# Intercambia el valor por `nuevo` y devuelve el anterior (alias de `fijar`).
+funcion intercambiar(celda, nuevo) {
+    retornar _compartido_fijar(celda, nuevo)
+}

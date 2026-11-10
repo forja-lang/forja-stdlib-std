@@ -7,6 +7,7 @@
 #       proporcionadas por la VM de Forja.
 
 importar "std/colecciones"
+importar "std/compartido"
 importar "std/log"
 
 # ─── Constantes HTTP ────────────────────────────────────────────────
@@ -76,6 +77,7 @@ clase ServidorWeb {
     _cors
     _corriendo
     _max_cuerpo
+    _requests
 
     constructor(puerto: Entero) {
         este._puerto = puerto
@@ -87,6 +89,8 @@ clase ServidorWeb {
         este._cors = falso
         este._corriendo = falso
         este._max_cuerpo = 10485760
+        # Contador de requests en una celda compartida: sobrevive a los hilos.
+        este._requests = compartido.nueva(0)
     }
 }
 
@@ -471,7 +475,8 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     }
 
     _enviar_respuesta(socket, respuesta)
-    log.informacion(metodo + " " + ruta + " -> " + a_texto(respuesta.codigo))
+    variable total = compartido.sumar(servidor._requests, 1)
+    log.informacion(metodo + " " + ruta + " -> " + a_texto(respuesta.codigo) + " (#" + a_texto(total) + ")")
 }
 
 # ─── Envio de respuestas ────────────────────────────────────────────

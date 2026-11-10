@@ -1,0 +1,35 @@
+# Tests de std/compartido: celdas compartidas entre hilos.
+importar "std/compartido"
+importar "std/temporizador"
+importar "std/tests/arnes"
+
+variable visitas = compartido.nueva(0)
+comprobar_igual("nueva arranca en el inicial", compartido.valor(visitas), 0)
+comprobar_igual("sumar devuelve el nuevo valor", compartido.sumar(visitas, 5), 5)
+comprobar_igual("sumar acumula", compartido.sumar(visitas, -2), 3)
+comprobar_igual("intercambiar devuelve el anterior", compartido.intercambiar(visitas, 10), 3)
+comprobar_igual("obtener ve el cambio", compartido.valor(visitas), 10)
+
+# ─── Varios hilos sobre la misma celda ────────────────────────────
+variable contador = compartido.nueva(0)
+variable hilos = 4
+variable por_hilo = 50
+variable i = 0
+mientras (i < hilos) {
+    hilo {
+        variable j = 0
+        mientras (j < por_hilo) {
+            compartido.sumar(contador, 1)
+            j = j + 1
+        }
+    }
+    i = i + 1
+}
+temporizador.dormir(400)
+comprobar_igual("4 hilos × 50 sumas", compartido.valor(contador), hilos * por_hilo)
+
+# ─── Decimales y errores ──────────────────────────────────────────
+variable precio = compartido.nueva(1.5)
+comprobar_igual("sumar decimal", compartido.sumar(precio, 0.25), 1.75)
+
+resumen()
