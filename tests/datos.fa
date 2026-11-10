@@ -1,0 +1,74 @@
+# Tests de std/datos: apertura, consultas, transacciones y migraciones.
+importar "std/datos"
+importar "std/archivo"
+importar "std/ruta"
+importar "std/tests/arnes"
+
+variable ruta_db = "forja_test_datos.db"
+archivo.eliminar_archivo(ruta_db)
+
+# ─── Apertura y CRUD ──────────────────────────────────────────────
+variable db = ok(datos.abrir(ruta_db))
+comprobar("abrir devuelve una conexión", db != nulo)
+comprobar("la conexión es un índice", tipo(db) == "entero")
+
+ok(datos.ejecutar(db, "DROP TABLE IF EXISTS tareas"))
+comprobar("crear tabla", ok(datos.ejecutar(db, "CREATE TABLE tareas (id INTEGER PRIMARY KEY, titulo TEXT NOT NULL, hecha INTEGER DEFAULT 0)")))
+comprobar("existe_tabla", datos.existe_tabla(db, "tareas"))
+comprobar("existe_tabla devuelve falso para otra", !datos.existe_tabla(db, "no_existe"))
+
+ok(datos.ejecutar_con(db, "INSERT INTO tareas (titulo) VALUES (?)", ["primera"]))
+ok(datos.ejecutar_con(db, "INSERT INTO tareas (titulo, hecha) VALUES (?, ?)", ["segunda", 1]))
+
+variable todas = ok(datos.consultar(db, "SELECT id, titulo FROM tareas ORDER BY id"))
+comprobar_igual("SELECT devuelve 2 filas", longitud(todas), 2)
+comprobar_texto("primera fila", todas[0]["titulo"], "primera")
+
+variable una = ok(datos.consultar_una(db, "SELECT titulo FROM tareas WHERE id = ?", [2]))
+comprobar_texto("consultar_una", una["titulo"], "segunda")
+
+variable ninguna = ok(datos.consultar_una(db, "SELECT titulo FROM tareas WHERE id = ?", [99]))
+comprobar("consultar_una sin filas devuelve nulo", ninguna == nulo)
+
+# ─── Transacción que confirma ─────────────────────────────────────
+variable r1 = datos.con_transaccion(db, func(tx) {
+    datos.ejecutar_con(tx, "INSERT INTO tareas (titulo) VALUES (?)", ["confirmada"])
+    retornar Ok(nulo)
+})
+comprobar("con_transaccion que confirma", ok(r1) != nulo || tipo(r1) == "objeto")
+comprobar_igual("la fila confirmada está", longitud(ok(datos.consultar_con(db, "SELECT id FROM tareas WHERE titulo = ?", ["confirmada"]))), 1)
+
+# ─── Transacción que revierte ─────────────────────────────────────
+variable r2 = datos.con_transaccion(db, func(tx) {
+    datos.ejecutar_con(tx, "INSERT INTO tareas (titulo) VALUES (?)", ["revertida"])
+    retornar Error("a propósito")
+})
+comprobar_igual("la fila revertida no está", longitud(ok(datos.consultar_con(db, "SELECT id FROM tareas WHERE titulo = ?", ["revertida"]))), 0)
+
+# ─── Migraciones ──────────────────────────────────────────────────
+variable directorio = "forja_test_migraciones"
+archivo.crear_directorio(directorio)
+archivo.escribir_archivo(directorio + "/001_crear.sql", "CREATE TABLE personas (id INTEGER PRIMARY KEY, nombre TEXT);")
+archivo.escribir_archivo(directorio + "/002_agregar.sql", "ALTER TABLE personas ADD COLUMN edad INTEGER;")
+
+comprobar_igual("migrar aplica 2 archivos", ok(datos.migrar(db, directorio)), 2)
+comprobar("la tabla nueva existe", datos.existe_tabla(db, "personas"))
+
+# Correr de nuevo no debe reaplicar nada (idempotente).
+comprobar_igual("migrar de nuevo aplica 0", ok(datos.migrar(db, directorio)), 0)
+
+# Una migración que falla no deja cambios.
+archivo.escribir_archivo(directorio + "/003_rota.sql", "CREATE TABLE ok_antes (id INTEGER); ESTO NO ES SQL;")
+variable r3 = datos.migrar(db, directorio)
+comprobar("una migración rota devuelve error", ok(r3) == nulo)
+comprobar("la migración rota no dejó la tabla a medias", !datos.existe_tabla(db, "ok_antes"))
+
+# ─── Limpieza ────────────────────────────────────────────────────
+archivo.eliminar_archivo(directorio + "/001_crear.sql")
+archivo.eliminar_archivo(directorio + "/002_agregar.sql")
+archivo.eliminar_archivo(directorio + "/003_rota.sql")
+archivo.eliminar_directorio(directorio)
+datos.cerrar(db)
+archivo.eliminar_archivo(ruta_db)
+
+resumen()

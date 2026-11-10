@@ -1,0 +1,284 @@
+# módulo: datos
+# Acceso a datos para aplicaciones reales: conexión con valores por defecto
+# sensatos, migraciones versionadas y transacciones con rollback automático.
+#
+# Uso:
+#   importar "std/datos"
+#
+#   variable db = datos.abrir("app.db")?          # Ok(conexión)
+#   datos.migrar(db, "migraciones")?              # aplica 001_*.sql en orden
+#   variable filas = datos.consultar(db, "SELECT ...")?
+#
+# Es una capa fina sobre `std/sqlite`: no hay ORM, pero sí lo mínimo para que
+# una base no se corrompa por olvidarse de WAL, de las claves foráneas o de
+# cerrar una transacción.
+#
+# Ver plans/PLAN_WEB_Y_GUI.md §4.3.
+
+importar "std/colecciones"
+importar "std/sqlite"
+importar "std/archivo"
+importar "std/log"
+importar "std/ruta"
+
+# ─── Auxiliares ─────────────────────────────────────────────────────
+
+# Devuelve el contenido de un Ok, o `por_defecto` si es Error.
+funcion _valor(valor, por_defecto) {
+    coincidir (valor) {
+        caso Ok(x) -> { retornar x }
+        caso _ -> { retornar por_defecto }
+    }
+}
+
+# ¿El Resultado fue Ok?
+funcion _ok(valor) -> Booleano {
+    coincidir (valor) {
+        caso Ok(_) -> { retornar verdadero }
+        caso _ -> { retornar falso }
+    }
+}
+
+# ─── Errores ────────────────────────────────────────────────────────
+
+clase ErrorDatos {
+    mensaje
+    codigo
+
+    constructor(mensaje: Texto, codigo: Entero) {
+        este.mensaje = mensaje
+        este.codigo = codigo
+    }
+}
+
+# ─── Conexión ───────────────────────────────────────────────────────
+
+# Abre (o crea) una base y la deja configurada:
+#   - WAL: lectores y escritor no se bloquean entre sí
+#   - foreign_keys: las FK se verifican (SQLite las ignora por defecto)
+#   - busy_timeout: espera en vez de fallar con "database is locked"
+funcion abrir(ruta: Texto) -> Resultado<Entero, ErrorDatos> {
+    variable db = sqlite.abrir(ruta)
+    coincidir (db) {
+        caso Ok(conexion) -> {
+            variable pragmas = [
+                "PRAGMA journal_mode = WAL",
+                "PRAGMA foreign_keys = ON",
+                "PRAGMA busy_timeout = 5000"
+            ]
+            variable i = 0
+            mientras (i < longitud(pragmas)) {
+                si (!_ok(sqlite.ejecutar(conexion, pragmas[i]))) {
+                    retornar Error(nuevo ErrorDatos("No se pudo configurar la base: " + pragmas[i], 2))
+                }
+                i = i + 1
+            }
+            retornar Ok(conexion)
+        }
+        caso Error(e) -> {
+            retornar Error(nuevo ErrorDatos("No se pudo abrir '" + ruta + "': " + e.mensaje, 1))
+        }
+        caso _ -> {
+            retornar Error(nuevo ErrorDatos("No se pudo abrir la base", 1))
+        }
+    }
+}
+
+funcion cerrar(db) {
+    retornar sqlite.cerrar(db)
+}
+
+# ─── Migraciones ────────────────────────────────────────────────────
+
+# Crea la tabla de control de migraciones si no existe.
+funcion _preparar_control(db) -> Booleano {
+    variable sql = "CREATE TABLE IF NOT EXISTS migraciones_aplicadas (" +
+        "nombre TEXT PRIMARY KEY, " +
+        "aplicada_en TEXT NOT NULL DEFAULT (datetime('now'))" +
+        ")"
+    retornar _ok(sqlite.ejecutar(db, sql))
+}
+
+# ¿Ya se aplicó esta migración?
+funcion _ya_aplicada(db, nombre: Texto) -> Booleano {
+    variable filas = sqlite.consultar_con_parametros(
+        db,
+        "SELECT nombre FROM migraciones_aplicadas WHERE nombre = ?",
+        [nombre]
+    )
+    coincidir (filas) {
+        caso Ok(registros) -> { retornar longitud(registros) > 0 }
+        caso _ -> { retornar falso }
+    }
+}
+
+funcion _registrar_aplicada(db, nombre: Texto) -> Booleano {
+    variable r = sqlite.ejecutar_con_parametros(
+        db,
+        "INSERT INTO migraciones_aplicadas (nombre) VALUES (?)",
+        [nombre]
+    )
+    coincidir (r) {
+        caso Ok(_) -> { retornar verdadero }
+        caso _ -> { retornar falso }
+    }
+}
+
+# Aplica las migraciones pendientes de un directorio, en orden alfabético.
+# Cada archivo es SQL puro; el nombre se registra en `migraciones_aplicadas`.
+# Retorna Ok(cantidad_aplicadas).
+funcion migrar(db, directorio: Texto) -> Resultado<Entero, ErrorDatos> {
+    si (!_preparar_control(db)) {
+        retornar Error(nuevo ErrorDatos("No se pudo crear la tabla migraciones_aplicadas", 3))
+    }
+
+    variable entradas = archivo.listar_directorio(directorio)
+    variable lista = _valor(entradas, nulo)
+    si (lista == nulo) {
+        retornar Error(nuevo ErrorDatos("No se pudo leer el directorio de migraciones: " + directorio, 4))
+    }
+    variable nombres = []
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        variable nombre = ruta.nombre_archivo(lista[i])
+        si (ruta.extension(nombre) == "sql") {
+            nombres = nombres + [nombre]
+        }
+        i = i + 1
+    }
+    # Orden alfabético: 001_, 002_, … (los nombres llevan el prefijo numérico).
+    variable ordenados = colecciones.ordenar(nombres)
+
+    variable aplicadas = 0
+    variable j = 0
+    mientras (j < longitud(ordenados)) {
+        variable nombre = ordenados[j]
+        si (!_ya_aplicada(db, nombre)) {
+            variable contenido = archivo.leer_archivo(directorio + "/" + nombre)
+            coincidir (contenido) {
+                caso Error(e) -> {
+                    retornar Error(nuevo ErrorDatos("No se pudo leer la migración '" + nombre + "': " + e.mensaje, 5))
+                }
+                caso Ok(sql) -> {
+                    # Cada migración es atómica: si falla, no queda a medias.
+                    _ok(sqlite.transaccion(db))
+                    variable ok_sql = _ok(sqlite.ejecutar_lote(db, sql))
+                    variable ok_reg = falso
+                    si (ok_sql) {
+                        ok_reg = _registrar_aplicada(db, nombre)
+                    }
+                    si (ok_sql && ok_reg) {
+                        _ok(sqlite.confirmar(db))
+                        aplicadas = aplicadas + 1
+                        log.informacion("migración aplicada: " + nombre)
+                    } sino {
+                        _ok(sqlite.deshacer(db))
+                        retornar Error(nuevo ErrorDatos("Falló la migración '" + nombre + "'", 6))
+                    }
+                }
+            }
+        }
+        j = j + 1
+    }
+    retornar Ok(aplicadas)
+}
+
+# ─── Transacciones ──────────────────────────────────────────────────
+
+# Ejecuta `cuerpo` dentro de una transacción. Si devuelve un `Error(...)`
+# hace ROLLBACK y propaga; si devuelve cualquier otra cosa, COMMIT.
+#
+#   variable r = datos.con_transaccion(db, func(tx) {
+#       datos.ejecutar(tx, "INSERT ...")?
+#       retornar Ok(nulo)
+#   })
+funcion con_transaccion(db, cuerpo: Funcion) {
+    si (!_ok(sqlite.transaccion(db))) {
+        retornar Error(nuevo ErrorDatos("No se pudo iniciar la transacción", 7))
+    }
+    variable resultado = cuerpo(db)
+    coincidir (resultado) {
+        caso Error(e) -> {
+            _ok(sqlite.deshacer(db))
+            retornar Error(e)
+        }
+        caso _ -> {
+            si (!_ok(sqlite.confirmar(db))) {
+                _ok(sqlite.deshacer(db))
+                retornar Error(nuevo ErrorDatos("No se pudo confirmar la transacción", 8))
+            }
+            retornar resultado
+        }
+    }
+}
+
+# ─── Consultas de conveniencia ──────────────────────────────────────
+
+# Ejecuta una sentencia y devuelve Ok(filas_afectadas) o Error.
+funcion ejecutar(db, sql: Texto) -> Resultado<Entero, ErrorDatos> {
+    variable r = sqlite.ejecutar(db, sql)
+    coincidir (r) {
+        caso Ok(n) -> { retornar Ok(n) }
+        caso Error(e) -> { retornar Error(nuevo ErrorDatos(e.mensaje, 9)) }
+        caso _ -> { retornar Error(nuevo ErrorDatos("Error al ejecutar SQL", 9)) }
+    }
+}
+
+# Igual que `ejecutar` pero con parámetros (evita inyección de SQL).
+funcion ejecutar_con(db, sql: Texto, valores) -> Resultado<Entero, ErrorDatos> {
+    variable r = sqlite.ejecutar_con_parametros(db, sql, valores)
+    coincidir (r) {
+        caso Ok(n) -> { retornar Ok(n) }
+        caso Error(e) -> { retornar Error(nuevo ErrorDatos(e.mensaje, 10)) }
+        caso _ -> { retornar Error(nuevo ErrorDatos("Error al ejecutar SQL", 10)) }
+    }
+}
+
+# Devuelve Ok(arreglo_de_mapas).
+funcion consultar(db, sql: Texto) -> Resultado<Arreglo<Mapa<Texto>>, ErrorDatos> {
+    variable r = sqlite.consultar(db, sql)
+    coincidir (r) {
+        caso Ok(filas) -> { retornar Ok(filas) }
+        caso Error(e) -> { retornar Error(nuevo ErrorDatos(e.mensaje, 11)) }
+        caso _ -> { retornar Error(nuevo ErrorDatos("Error al consultar", 11)) }
+    }
+}
+
+funcion consultar_con(db, sql: Texto, valores) -> Resultado<Arreglo<Mapa<Texto>>, ErrorDatos> {
+    variable r = sqlite.consultar_con_parametros(db, sql, valores)
+    coincidir (r) {
+        caso Ok(filas) -> { retornar Ok(filas) }
+        caso Error(e) -> { retornar Error(nuevo ErrorDatos(e.mensaje, 12)) }
+        caso _ -> { retornar Error(nuevo ErrorDatos("Error al consultar", 12)) }
+    }
+}
+
+# Primera fila o nulo.
+funcion consultar_una(db, sql: Texto, valores) -> Resultado<Mapa<Texto>, ErrorDatos> {
+    variable r = sqlite.consultar_con_parametros(db, sql, valores)
+    coincidir (r) {
+        caso Ok(filas) -> {
+            si (longitud(filas) == 0) {
+                retornar Ok(nulo)
+            }
+            retornar Ok(filas[0])
+        }
+        caso Error(e) -> { retornar Error(nuevo ErrorDatos(e.mensaje, 13)) }
+        caso _ -> { retornar Error(nuevo ErrorDatos("Error al consultar", 13)) }
+    }
+}
+
+# ─── Utilidades ─────────────────────────────────────────────────────
+
+# ¿Existe la tabla?
+funcion existe_tabla(db, tabla: Texto) -> Booleano {
+    variable filas = sqlite.consultar_con_parametros(
+        db,
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        [tabla]
+    )
+    coincidir (filas) {
+        caso Ok(registros) -> { retornar longitud(registros) > 0 }
+        caso _ -> { retornar falso }
+    }
+}

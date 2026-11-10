@@ -362,6 +362,17 @@ funcion deshacer(conexion) {
 # Función helper: ejecutar sin verificar resultado
 # ═════════════════════════════════════════════════════════════════════════
 
+# Ejecuta **varias** sentencias separadas por ";".
+# Es lo que necesita un archivo de migración: `ejecutar` corre una sola.
+# Retorna Ok(nulo) o Error(ErrorSQLite)
+funcion ejecutar_lote(conexion, sql: Texto) {
+    variable res = _sqlite_ejecutar_lote(conexion, sql)
+    si (res < 0) {
+        retornar Error(nuevo ErrorSQLite("Error al ejecutar el lote de SQL", 7))
+    }
+    retornar Ok(nulo)
+}
+
 # Ejecuta SQL sin verificar el resultado (ignora errores).
 # Útil para scripts rápidos o prototipos.
 # No se recomienda para código en producción.
