@@ -1,0 +1,98 @@
+# modulo: limitador
+# Descripcion: Limitador de intentos por clave y ventana de tiempo
+#
+# Uso: importar "std/limitador"
+#
+#   variable l = limitador.limitador(5, 60)     # 5 intentos por minuto
+#   si (!limitador.permitir(l, "login:" + ip)) {
+#       # demasiados intentos: responder 429
+#   }
+#   limitador.reiniciar(l, "login:" + ip)        # tras un login exitoso
+#
+# Ventana fija: se abre con el primer intento y se reinicia sola al vencer.
+# En memoria del proceso (con `hilo {}` no se comparte; ver N11 del plan web).
+# Base para rate limiting de login, de API y de formularios.
+
+# ─── Clase ──────────────────────────────────────────────────────────
+clase Limitador {
+    maximo
+    ventana_ms
+    _estado
+
+    constructor(maximo: Entero, ventana_segundos: Entero) {
+        este.maximo = maximo
+        este.ventana_ms = ventana_segundos * 1000
+        este._estado = {}
+    }
+}
+
+funcion limitador(maximo: Entero, ventana_segundos: Entero) {
+    retornar nuevo Limitador(maximo, ventana_segundos)
+}
+
+# ─── Operaciones ────────────────────────────────────────────────────
+
+# Registra un intento. Verdadero si todavía está dentro del límite.
+# Un contador nuevo (o vencido) también consume su primer intento.
+funcion permitir(l, clave: Texto) -> Logico {
+    variable ahora = _sistema_tiempo_ms()
+    variable registro = l._estado[clave]
+    si (registro == nulo || registro["reinicia_ms"] <= ahora) {
+        l._estado[clave] = {"intentos": 1, "reinicia_ms": ahora + l.ventana_ms}
+        retornar l.maximo >= 1
+    }
+    si (registro["intentos"] >= l.maximo) {
+        retornar falso
+    }
+    registro["intentos"] = registro["intentos"] + 1
+    l._estado[clave] = registro
+    retornar verdadero
+}
+
+# Intentos que le quedan a la clave (0 si está bloqueada).
+funcion restantes(l, clave: Texto) -> Entero {
+    variable registro = l._estado[clave]
+    si (registro == nulo || registro["reinicia_ms"] <= _sistema_tiempo_ms()) {
+        retornar l.maximo
+    }
+    variable usados = registro["intentos"]
+    si (usados >= l.maximo) {
+        retornar 0
+    }
+    retornar l.maximo - usados
+}
+
+# Milisegundos hasta que la clave se desbloquee (0 si ya está libre).
+funcion espera_ms(l, clave: Texto) -> Entero {
+    variable registro = l._estado[clave]
+    si (registro == nulo) {
+        retornar 0
+    }
+    variable falta = registro["reinicia_ms"] - _sistema_tiempo_ms()
+    si (falta < 0) {
+        retornar 0
+    }
+    retornar falta
+}
+
+funcion reiniciar(l, clave: Texto) {
+    l._estado[clave] = nulo
+    retornar nulo
+}
+
+# Olvida los registros vencidos (llamar periódicamente en un proceso largo).
+funcion limpiar(l) -> Entero {
+    variable lista = claves(l._estado)
+    variable ahora = _sistema_tiempo_ms()
+    variable borrados = 0
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        variable registro = l._estado[lista[i]]
+        si (registro == nulo || registro["reinicia_ms"] <= ahora) {
+            l._estado[lista[i]] = nulo
+            borrados = borrados + 1
+        }
+        i = i + 1
+    }
+    retornar borrados
+}

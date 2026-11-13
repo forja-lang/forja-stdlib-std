@@ -1,0 +1,38 @@
+# Tests de std/limitador: ventana fija, bloqueo y reinicio.
+importar "std/limitador"
+importar "std/tests/arnes"
+
+variable l = limitador.limitador(3, 60)
+
+comprobar_igual("restantes al empezar", limitador.restantes(l, "k"), 3)
+comprobar("1er intento permitido", limitador.permitir(l, "k"))
+comprobar("2do intento permitido", limitador.permitir(l, "k"))
+comprobar("3er intento permitido", limitador.permitir(l, "k"))
+comprobar("4to intento bloqueado", limitador.permitir(l, "k") == falso)
+comprobar_igual("restantes bloqueado", limitador.restantes(l, "k"), 0)
+comprobar("espera > 0", limitador.espera_ms(l, "k") > 0)
+comprobar("espera <= ventana", limitador.espera_ms(l, "k") <= 60000)
+
+# Claves independientes.
+comprobar("otra clave no está afectada", limitador.permitir(l, "otra"))
+
+# Reinicio tras login exitoso.
+limitador.reiniciar(l, "k")
+comprobar_igual("restantes tras reiniciar", limitador.restantes(l, "k"), 3)
+comprobar("permitido tras reiniciar", limitador.permitir(l, "k"))
+
+# Ventana de 0 ms: cada intento abre ventana nueva (nunca bloquea más de 1).
+variable l0 = limitador.limitador(1, 0)
+comprobar("ventana 0: primer intento", limitador.permitir(l0, "x"))
+comprobar("ventana 0: vence sola", limitador.permitir(l0, "x"))
+
+# Máximo 0: nada pasa.
+variable l_cero = limitador.limitador(0, 60)
+comprobar("máximo 0 bloquea", limitador.permitir(l_cero, "x") == falso)
+
+# limpiar() borra los vencidos.
+variable l_limpio = limitador.limitador(1, 0)
+limitador.permitir(l_limpio, "a")
+comprobar("limpiar: borra vencidos", limitador.limpiar(l_limpio) >= 0)
+
+resumen()

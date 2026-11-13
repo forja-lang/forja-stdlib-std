@@ -1,0 +1,293 @@
+# modulo: plantillas
+# Descripcion: Plantillas de texto con escape de HTML automático (SSR seguro)
+#
+# Uso: importar "std/plantillas"
+#
+#   variable pagina = plantillas.interpolar(
+#       "<h1>{{titulo}}</h1>
+#        <ul>{% para t en tareas %}<li>{{t}}</li>{% fin %}</ul>",
+#       {"titulo": "Tareas", "tareas": ["una", "otra"]}
+#   )
+#
+# Marcas:
+#   {{clave}}                     valor escapado (seguro por defecto)
+#   {{{clave}}}                   valor CRUDO (sólo HTML de confianza)
+#   {% si clave %}…{% sino %}…{% fin %}
+#   {% para item en lista %}…{% fin %}   (se pueden anidar)
+#
+# Verdadero para `{% si %}`: no es nulo, ni falso, ni 0, ni "".
+# Una clave ausente se interpola como ""; un bloque mal cerrado se deja tal
+# cual (se ve roto en la página en vez de comerse el resto del documento).
+
+importar "std/colecciones"
+
+# ─── Escape ─────────────────────────────────────────────────────────
+
+# Escapa los cinco caracteres que rompen HTML (`&` primero, si no se escapa
+# dos veces lo ya escapado).
+funcion escapar_html(texto: Texto) -> Texto {
+    variable salida = ""
+    variable i = 0
+    mientras (i < longitud(texto)) {
+        variable c = subcadena(texto, i, 1)
+        si (c == "&") {
+            salida = salida + "&amp;"
+        } sino {
+            si (c == "<") {
+                salida = salida + "&lt;"
+            } sino {
+                si (c == ">") {
+                    salida = salida + "&gt;"
+                } sino {
+                    si (c == "\"") {
+                        salida = salida + "&quot;"
+                    } sino {
+                        si (c == "'") {
+                            salida = salida + "&#39;"
+                        } sino {
+                            salida = salida + c
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1
+    }
+    retornar salida
+}
+
+# ─── Parseo ─────────────────────────────────────────────────────────
+
+funcion _verdadero(valor) -> Logico {
+    si (valor == nulo || valor == falso || valor == "" || valor == 0) {
+        retornar falso
+    }
+    retornar verdadero
+}
+
+# Condición de `{% si %}`: admite negación con `!` (`{% si !t.hecha %}`).
+funcion _condicion(datos, clave: Texto) -> Logico {
+    variable texto_clave = recortar(clave)
+    si (empieza_con(texto_clave, "!")) {
+        variable resto = recortar(subcadena(texto_clave, 1, longitud(texto_clave) - 1))
+        retornar !_verdadero(_valor_bruto(datos, resto))
+    }
+    retornar _verdadero(_valor_bruto(datos, texto_clave))
+}
+
+# Posición (en caracteres) de la próxima marca `{%` o `{{`, o -1.
+funcion _proxima_marca(plantilla: Texto, desde: Entero) -> Entero {
+    variable resto = subcadena(plantilla, desde, longitud(plantilla) - desde)
+    variable p_tag = indice_de(resto, "{%")
+    variable p_var = indice_de(resto, "{{")
+    si (p_tag < 0) {
+        si (p_var < 0) {
+            retornar -1
+        }
+        retornar p_var
+    }
+    si (p_var < 0 || p_tag <= p_var) {
+        retornar p_tag
+    }
+    retornar p_var
+}
+
+# Parsea nodos hasta `{% fin %}` / `{% sino %}` (o el final del texto).
+# Devuelve {"nodos": [...], "fin": posición, "terminador": "fin"|"sino"|""}.
+# Con `permitir_cierre` en falso (nivel superior) un `{% fin %}` suelto se
+# deja como texto: no hay bloque que cerrar.
+funcion _parsear_bloque(plantilla: Texto, desde: Entero, permitir_cierre: Logico) {
+    variable nodos = []
+    variable i = desde
+    variable total = longitud(plantilla)
+
+    mientras (i < total) {
+        variable p = _proxima_marca(plantilla, i)
+        si (p < 0) {
+            nodos = nodos + [{"tipo": "texto", "valor": subcadena(plantilla, i, total - i)}]
+            retornar {"nodos": nodos, "fin": total, "terminador": ""}
+        }
+        variable pos = i + p
+        si (pos > i) {
+            nodos = nodos + [{"tipo": "texto", "valor": subcadena(plantilla, i, pos - i)}]
+        }
+
+        si (subcadena(plantilla, pos, 2) == "{%") {
+            variable resto_tag = subcadena(plantilla, pos, total - pos)
+            variable fin_tag = indice_de(resto_tag, "%}")
+            si (fin_tag < 0) {
+                # Etiqueta sin cerrar: se deja tal cual.
+                nodos = nodos + [{"tipo": "texto", "valor": resto_tag}]
+                retornar {"nodos": nodos, "fin": total, "terminador": ""}
+            }
+            variable etiqueta = recortar(subcadena(plantilla, pos + 2, fin_tag - 2))
+            variable despues = pos + fin_tag + 2
+
+            si (etiqueta == "fin" || etiqueta == "sino") {
+                si (permitir_cierre) {
+                    retornar {"nodos": nodos, "fin": despues, "terminador": etiqueta}
+                }
+                nodos = nodos + [{"tipo": "texto", "valor": "{% " + etiqueta + " %}"}]
+                i = despues
+            } sino {
+                si (empieza_con(etiqueta, "si ")) {
+                    variable clave = recortar(subcadena(etiqueta, 3, longitud(etiqueta) - 3))
+                    variable cuerpo_si = _parsear_bloque(plantilla, despues, verdadero)
+                    variable nodo_si = {"tipo": "si", "clave": clave, "cierto": cuerpo_si["nodos"], "falso": []}
+                    variable cursor = cuerpo_si["fin"]
+                    si (cuerpo_si["terminador"] == "sino") {
+                        variable alterno = _parsear_bloque(plantilla, cursor, verdadero)
+                        nodo_si["falso"] = alterno["nodos"]
+                        cursor = alterno["fin"]
+                    }
+                    nodos = nodos + [nodo_si]
+                    i = cursor
+                } sino {
+                    si (empieza_con(etiqueta, "para ")) {
+                        variable partes = dividir(recortar(subcadena(etiqueta, 5, longitud(etiqueta) - 5)), " ")
+                        si (longitud(partes) >= 3) {
+                            variable cuerpo_para = _parsear_bloque(plantilla, despues, verdadero)
+                            nodos = nodos + [{
+                                "tipo": "para",
+                                "item": partes[0],
+                                "lista": partes[2],
+                                "cuerpo": cuerpo_para["nodos"]
+                            }]
+                            i = cuerpo_para["fin"]
+                        } sino {
+                            nodos = nodos + [{"tipo": "texto", "valor": "{% " + etiqueta + " %}"}]
+                            i = despues
+                        }
+                    } sino {
+                        nodos = nodos + [{"tipo": "texto", "valor": "{% " + etiqueta + " %}"}]
+                        i = despues
+                    }
+                }
+            }
+        } sino {
+            si (subcadena(plantilla, pos, 3) == "{{{") {
+                variable resto_crudo = subcadena(plantilla, pos, total - pos)
+                variable cierre_crudo = indice_de(resto_crudo, "}}}")
+                si (cierre_crudo < 0) {
+                    nodos = nodos + [{"tipo": "texto", "valor": resto_crudo}]
+                    retornar {"nodos": nodos, "fin": total, "terminador": ""}
+                }
+                nodos = nodos + [{"tipo": "var", "clave": recortar(subcadena(plantilla, pos + 3, cierre_crudo - 3)), "crudo": verdadero}]
+                i = pos + cierre_crudo + 3
+            } sino {
+                variable resto_var = subcadena(plantilla, pos, total - pos)
+                variable cierre_var = indice_de(resto_var, "}}")
+                si (cierre_var < 0) {
+                    nodos = nodos + [{"tipo": "texto", "valor": resto_var}]
+                    retornar {"nodos": nodos, "fin": total, "terminador": ""}
+                }
+                nodos = nodos + [{"tipo": "var", "clave": recortar(subcadena(plantilla, pos + 2, cierre_var - 2)), "crudo": falso}]
+                i = pos + cierre_var + 2
+            }
+        }
+    }
+
+    retornar {"nodos": nodos, "fin": total, "terminador": ""}
+}
+
+# ─── Render ─────────────────────────────────────────────────────────
+
+funcion _valor_de(datos, clave: Texto) -> Texto {
+    variable valor = _valor_bruto(datos, clave)
+    si (valor == nulo) {
+        retornar ""
+    }
+    retornar a_texto(valor)
+}
+
+# Copia los datos y agrega una variable (para no pisar el contexto del padre).
+funcion _con_variable(datos, nombre: Texto, valor) {
+    variable copia = {}
+    si (datos != nulo) {
+        variable lista = claves(datos)
+        variable i = 0
+        mientras (i < longitud(lista)) {
+            copia[lista[i]] = datos[lista[i]]
+            i = i + 1
+        }
+    }
+    copia[nombre] = valor
+    retornar copia
+}
+
+funcion _renderizar(nodos, datos) -> Texto {
+    variable salida = ""
+    variable i = 0
+    mientras (i < longitud(nodos)) {
+        variable nodo = nodos[i]
+        variable tipo = nodo["tipo"]
+        si (tipo == "texto") {
+            salida = salida + nodo["valor"]
+        } sino {
+            si (tipo == "var") {
+                variable texto = _valor_de(datos, nodo["clave"])
+                si (nodo["crudo"]) {
+                    salida = salida + texto
+                } sino {
+                    salida = salida + escapar_html(texto)
+                }
+            } sino {
+                si (tipo == "si") {
+                    si (_condicion(datos, nodo["clave"])) {
+                        salida = salida + _renderizar(nodo["cierto"], datos)
+                    } sino {
+                        salida = salida + _renderizar(nodo["falso"], datos)
+                    }
+                } sino {
+                    si (tipo == "para") {
+                        variable lista = _valor_bruto(datos, nodo["lista"])
+                        si (lista != nulo) {
+                            variable k = 0
+                            mientras (k < longitud(lista)) {
+                                variable contexto = _con_variable(datos, nodo["item"], lista[k])
+                                salida = salida + _renderizar(nodo["cuerpo"], contexto)
+                                k = k + 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1
+    }
+    retornar salida
+}
+
+# Valor sin convertir a texto. Soporta rutas con puntos (`t.titulo`) para
+# recorrer mapas anidados (el item de un `{% para %}`).
+funcion _valor_bruto(datos, clave: Texto) {
+    variable actual = datos
+    variable partes = dividir(clave, ".")
+    variable i = 0
+    mientras (i < longitud(partes)) {
+        si (actual == nulo) {
+            retornar nulo
+        }
+        actual = actual[partes[i]]
+        i = i + 1
+    }
+    retornar actual
+}
+
+# ─── API ────────────────────────────────────────────────────────────
+
+funcion interpolar(plantilla: Texto, datos) -> Texto {
+    variable arbol = _parsear_bloque(plantilla, 0, falso)
+    retornar _renderizar(arbol["nodos"], datos)
+}
+
+# Interpola varias filas con la misma plantilla y une el resultado.
+funcion interpolar_filas(plantilla: Texto, filas) -> Texto {
+    variable partes = []
+    variable i = 0
+    mientras (i < longitud(filas)) {
+        partes = partes + [interpolar(plantilla, filas[i])]
+        i = i + 1
+    }
+    retornar unir_elementos(partes, "")
+}

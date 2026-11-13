@@ -32,7 +32,9 @@ clase ErrorCrypto {
 # ALEATORIEDAD SEGURA
 # ═════════════════════════════════════════════════════════════════════════
 
-# Genera n bytes criptográficamente aleatorios
+# Genera n bytes criptográficamente aleatorios, devueltos en HEX
+# (2 caracteres por byte). Así el valor es ASCII seguro para usar como id de
+# sesión, token CSRF o sal.
 funcion bytes_aleatorios(n: Entero) -> Resultado<Texto, ErrorCrypto> {
     si (n <= 0) {
         retornar Error(nuevo ErrorCrypto("n debe ser positivo", 1))

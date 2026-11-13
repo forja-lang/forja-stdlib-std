@@ -1,0 +1,122 @@
+# Tests de std/plantillas: escape de HTML e interpolación.
+importar "std/plantillas"
+importar "std/tests/arnes"
+
+# ─── Escape ────────────────────────────────────────────────────────
+comprobar_texto("escapar: sin cambios", plantillas.escapar_html("hola mundo"), "hola mundo")
+comprobar_texto("escapar: < y >", plantillas.escapar_html("<b>x</b>"), "&lt;b&gt;x&lt;/b&gt;")
+comprobar_texto("escapar: comillas", plantillas.escapar_html("\"a\" 'b'"), "&quot;a&quot; &#39;b&#39;")
+comprobar_texto("escapar: & primero", plantillas.escapar_html("a & b"), "a &amp; b")
+comprobar_texto("escapar: no doble-escapa", plantillas.escapar_html("&lt;"), "&amp;lt;")
+comprobar_texto("escapar: script", plantillas.escapar_html("<script>alert(1)</script>"),
+    "&lt;script&gt;alert(1)&lt;/script&gt;")
+
+# ─── Interpolación escapada ────────────────────────────────────────
+comprobar_texto("interpolar: una clave",
+    plantillas.interpolar("<h1>{{titulo}}</h1>", {"titulo": "Tareas"}),
+    "<h1>Tareas</h1>")
+comprobar_texto("interpolar: valor escapado",
+    plantillas.interpolar("<p>{{mensaje}}</p>", {"mensaje": "Hola <ana> & 'bob'"}),
+    "<p>Hola &lt;ana&gt; &amp; &#39;bob&#39;</p>")
+comprobar_texto("interpolar: varias claves",
+    plantillas.interpolar("{{a}}-{{b}}", {"a": 1, "b": 2}), "1-2")
+comprobar_texto("interpolar: sin marcas",
+    plantillas.interpolar("texto plano", {}), "texto plano")
+comprobar_texto("interpolar: clave ausente",
+    plantillas.interpolar("x{{falta}}y", {"otra": 1}), "xy")
+comprobar_texto("interpolar: datos nulo",
+    plantillas.interpolar("x{{falta}}y", nulo), "xy")
+comprobar_texto("interpolar: espacios dentro de las llaves",
+    plantillas.interpolar("{{ nombre }}", {"nombre": "ana"}), "ana")
+comprobar_texto("interpolar: llave sin cerrar",
+    plantillas.interpolar("a {{b", {"b": "x"}), "a {{b")
+
+# ─── Interpolación cruda ───────────────────────────────────────────
+comprobar_texto("crudo: no escapa",
+    plantillas.interpolar("<div>{{{html}}}</div>", {"html": "<b>ok</b>"}),
+    "<div><b>ok</b></div>")
+# Lo crudo no se re-procesa (no se interpola dentro del valor insertado).
+comprobar_texto("crudo: no re-interpola",
+    plantillas.interpolar("{{{x}}}", {"x": "{{y}}", "y": "no"}),
+    "{{y}}")
+
+# ─── Filas ─────────────────────────────────────────────────────────
+comprobar_texto("filas: une las filas",
+    plantillas.interpolar_filas("<li>{{n}}</li>", [{"n": 1}, {"n": 2}, {"n": 3}]),
+    "<li>1</li><li>2</li><li>3</li>")
+comprobar_texto("filas: vacío", plantillas.interpolar_filas("<li>{{n}}</li>", []), "")
+
+# ─── Condicionales ─────────────────────────────────────────────────
+comprobar_texto("si: verdadero",
+    plantillas.interpolar("{% si activo %}sí{% fin %}", {"activo": verdadero}), "sí")
+comprobar_texto("si: falso",
+    plantillas.interpolar("{% si activo %}sí{% fin %}", {"activo": falso}), "")
+comprobar_texto("si/sino: falso usa la rama sino",
+    plantillas.interpolar("{% si activo %}sí{% sino %}no{% fin %}", {"activo": falso}), "no")
+comprobar_texto("si: clave ausente es falso",
+    plantillas.interpolar("{% si falta %}x{% sino %}y{% fin %}", {}), "y")
+comprobar_texto("si: texto vacío es falso",
+    plantillas.interpolar("{% si t %}x{% sino %}y{% fin %}", {"t": ""}), "y")
+comprobar_texto("si: texto no vacío es verdadero",
+    plantillas.interpolar("{% si t %}x{% sino %}y{% fin %}", {"t": "algo"}), "x")
+comprobar_texto("si: número 0 es falso",
+    plantillas.interpolar("{% si n %}x{% sino %}y{% fin %}", {"n": 0}), "y")
+comprobar_texto("si: número no cero es verdadero",
+    plantillas.interpolar("{% si n %}x{% sino %}y{% fin %}", {"n": 3}), "x")
+
+# ─── Bucles ────────────────────────────────────────────────────────
+comprobar_texto("para: recorre la lista",
+    plantillas.interpolar("{% para t en tareas %}<li>{{t}}</li>{% fin %}", {"tareas": ["a", "b"]}),
+    "<li>a</li><li>b</li>")
+comprobar_texto("para: lista vacía", plantillas.interpolar("{% para t en tareas %}x{% fin %}", {"tareas": []}), "")
+comprobar_texto("para: clave ausente", plantillas.interpolar("{% para t en nada %}x{% fin %}", {}), "")
+comprobar_texto("para: escapa cada elemento",
+    plantillas.interpolar("{% para t en l %}{{t}}{% fin %}", {"l": ["<a>", "<b>"]}),
+    "&lt;a&gt;&lt;b&gt;")
+comprobar_texto("para: usa el contexto del padre",
+    plantillas.interpolar("{% para t en l %}{{t}}-{{sufijo}};{% fin %}", {"l": ["a"], "sufijo": "!"}),
+    "a-!;")
+# El nombre del item no pisa el contexto del padre después del bucle.
+comprobar_texto("para: no filtra el item al contexto",
+    plantillas.interpolar("{% para x en l %}{{x}}{% fin %}[{{x}}]", {"l": [1], "x": "padre"}),
+    "1[padre]")
+
+# ─── Rutas con punto ──────────────────────────────────
+comprobar_texto("ruta: mapa anidado", plantillas.interpolar("{{t.titulo}}", {"t": {"titulo": "x"}}), "x")
+comprobar_texto("ruta: anidada dentro de un bucle",
+    plantillas.interpolar("{% para t en l %}{{t.titulo}};{% fin %}", {"l": [{"titulo": "a"}, {"titulo": "b"}]}),
+    "a;b;")
+comprobar_texto("ruta: escapada", plantillas.interpolar("{{t.x}}", {"t": {"x": "<b>"}}), "&lt;b&gt;")
+comprobar_texto("ruta: clave ausente", plantillas.interpolar("[{{t.no}}]", {"t": {"x": 1}}), "[]")
+comprobar_texto("ruta: negación en si", plantillas.interpolar("{% si !t.hecha %}P{% fin %}", {"t": {"hecha": falso}}), "P")
+comprobar_texto("ruta: negación con valor", plantillas.interpolar("{% si !t.hecha %}P{% sino %}H{% fin %}", {"t": {"hecha": verdadero}}), "H")
+
+# ─── Anidamiento ───────────────────────────────────────────────────
+comprobar_texto("anidado: si dentro de para",
+    plantillas.interpolar("{% para t en l %}{% si t %}S{% sino %}N{% fin %}{% fin %}", {"l": [1, 0, 2]}),
+    "SNS")
+comprobar_texto("anidado: para dentro de para",
+    plantillas.interpolar("{% para f en filas %}<tr>{% para c en f %}<td>{{c}}</td>{% fin %}</tr>{% fin %}",
+        {"filas": [[1, 2], [3]]}),
+    "<tr><td>1</td><td>2</td></tr><tr><td>3</td></tr>")
+comprobar_texto("anidado: si dentro de si",
+    plantillas.interpolar("{% si a %}{% si b %}ab{% sino %}a{% fin %}{% fin %}", {"a": verdadero, "b": falso}),
+    "a")
+
+# ─── Plantillas rotas ──────────────────────────────────────────────
+comprobar_texto("roto: fin suelto se deja como texto",
+    plantillas.interpolar("texto{% fin %}más", {}), "texto{% fin %}más")
+comprobar_texto("roto: si sin fin cierra al final del texto",
+    plantillas.interpolar("{% si a %}x", {"a": verdadero}), "x")
+comprobar_texto("roto: etiqueta desconocida se deja tal cual",
+    plantillas.interpolar("{% invento %}x{% fin %}", {}), "{% invento %}x{% fin %}")
+
+# ─── Uso típico: página SSR ────────────────────────────────────────
+variable pagina = plantillas.interpolar(
+    "<!doctype html><html><head><title>{{titulo}}</title></head><body><h1>{{titulo}}</h1></body></html>",
+    {"titulo": "Tareas & notas"}
+)
+comprobar("ssr: escapa el título en el <title>", contiene(pagina, "<title>Tareas &amp; notas</title>"))
+comprobar("ssr: no deja marcas sin resolver", contiene(pagina, "{{") == falso)
+
+resumen()

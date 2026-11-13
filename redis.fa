@@ -1,0 +1,384 @@
+# modulo: redis
+# Descripcion: Cliente Redis (protocolo RESP) sobre sockets TCP
+#
+# Uso: importar "std/redis"
+#
+#   variable r = redis.conectar("127.0.0.1", 6379)
+#   redis.fijar(r, "clave", "valor")
+#   redis.fijar_por_segundos(r, "sesion", "abc", 3600)
+#   variable v = redis.traer(r, "clave")
+#   redis.desconectar(r)
+#
+# Base para sesiones, caché y colas (Fase 2/3 del plan web).
+#
+# Lo que NO hay todavía: pool de conexiones, reconexión automática y pub/sub
+# bloqueante (`suscribir` con bucle). Para pub/sub usar `comando_crudo()` con la
+# conexión en modo suscripción y leer con `recibir_crudo()`.
+#
+# Los nombres evitan los que ya existen en otros módulos (`cerrar`, `ejecutar`):
+# ver N28 del plan web.
+#
+# Nota (N23): `longitud` cuenta BYTES y `subcadena` indexa por CARACTERES. El
+# parser traduce el largo de cada bulk de bytes a caracteres para no cortar
+# valores UTF-8 a la mitad.
+
+importar "std/colecciones"
+
+# ─── Clase Redis ────────────────────────────────────────────────────
+clase Redis {
+    _socket
+    _buffer
+    host
+    puerto
+
+    constructor(socket, host: Texto, puerto: Entero) {
+        este._socket = socket
+        este._buffer = ""
+        este.host = host
+        este.puerto = puerto
+    }
+}
+
+# ─── Conexión ───────────────────────────────────────────────────────
+
+# Abre una conexión. Un puerto cerrado aborta con `conexion_rechazada`
+# (el nativo lo informa): no hay reintentos todavía.
+funcion conectar(host: Texto, puerto: Entero) {
+    variable socket = _socket_tcp_conectar(host, puerto)
+    _socket_fijar_timeout(socket, 5000)
+    retornar nuevo Redis(socket, host, puerto)
+}
+
+funcion desconectar(cliente) {
+    _socket_cerrar(cliente._socket)
+    retornar nulo
+}
+
+# ─── Codificación RESP ──────────────────────────────────────────────
+
+# Codifica un comando como array de bulk strings (la forma canónica de RESP).
+# `longitud(arg)` da bytes, que es justo lo que pide `$<largo>`.
+funcion _resp_codificar(argumentos) -> Texto {
+    variable partes = ["*" + a_texto(longitud(argumentos)) + "\r\n"]
+    variable i = 0
+    mientras (i < longitud(argumentos)) {
+        variable argumento = a_texto(argumentos[i])
+        partes = partes + ["$" + a_texto(longitud(argumento)) + "\r\n" + argumento + "\r\n"]
+        i = i + 1
+    }
+    retornar unir_elementos(partes, "")
+}
+
+# ─── Decodificación RESP ────────────────────────────────────────────
+
+# Corta la primera línea (`\r\n`) desde `pos`.
+# Devuelve {"linea": Texto, "fin": posición siguiente} o nulo si falta el fin.
+funcion _resp_linea(texto: Texto, pos: Entero) {
+    # Se pide de más (`longitud` da bytes ≥ caracteres) y `subcadena` recorta.
+    variable resto = subcadena(texto, pos, longitud(texto) - pos)
+    variable corte = indice_de(resto, "\r\n")
+    si (corte < 0) {
+        retornar nulo
+    }
+    retornar {"linea": subcadena(texto, pos, corte), "fin": pos + corte + 2}
+}
+
+# Cuántos CARACTERES ocupan `n_bytes` desde la posición (en caracteres) `pos`.
+funcion _caracteres_de_bytes(texto: Texto, pos: Entero, n_bytes: Entero) -> Entero {
+    variable caracteres = 0
+    variable bytes = 0
+    mientras (bytes < n_bytes) {
+        variable c = subcadena(texto, pos + caracteres, 1)
+        si (longitud(c) == 0) {
+            romper
+        }
+        bytes = bytes + longitud(c)
+        caracteres = caracteres + 1
+    }
+    retornar caracteres
+}
+
+# Parsea un valor RESP en `pos`.
+# Devuelve {"tipo", "valor", "fin"} o nulo si el buffer está incompleto.
+# `tipo` es "texto", "entero", "nulo", "arreglo" o "error".
+funcion _resp_parsear(texto: Texto, pos: Entero) {
+    variable cabecera = _resp_linea(texto, pos)
+    si (cabecera == nulo) {
+        retornar nulo
+    }
+    variable linea = cabecera["linea"]
+    variable despues = cabecera["fin"]
+    variable marca = subcadena(linea, 0, 1)
+    variable resto_linea = subcadena(linea, 1, longitud(linea) - 1)
+
+    si (marca == "+") {
+        retornar {"tipo": "texto", "valor": resto_linea, "fin": despues}
+    }
+    si (marca == "-") {
+        retornar {"tipo": "error", "valor": resto_linea, "fin": despues}
+    }
+    si (marca == ":") {
+        retornar {"tipo": "entero", "valor": a_entero(resto_linea), "fin": despues}
+    }
+
+    si (marca == "$") {
+        variable n_bytes = a_entero(resto_linea)
+        si (n_bytes == nulo) {
+            retornar {"tipo": "error", "valor": "protocolo: bulk sin largo", "fin": despues}
+        }
+        si (n_bytes < 0) {
+            retornar {"tipo": "nulo", "valor": nulo, "fin": despues}
+        }
+        variable n_caracteres = _caracteres_de_bytes(texto, despues, n_bytes)
+        variable carga = subcadena(texto, despues, n_caracteres)
+        si (longitud(carga) < n_bytes) {
+            # Falta el cuerpo completo: se pide más al socket.
+            retornar nulo
+        }
+        variable fin_carga = despues + n_caracteres
+        variable cierre = subcadena(texto, fin_carga, 2)
+        si (cierre != "\r\n") {
+            retornar nulo
+        }
+        retornar {"tipo": "texto", "valor": carga, "fin": fin_carga + 2}
+    }
+
+    si (marca == "*") {
+        variable cantidad = a_entero(resto_linea)
+        si (cantidad == nulo) {
+            retornar {"tipo": "error", "valor": "protocolo: array sin largo", "fin": despues}
+        }
+        si (cantidad < 0) {
+            retornar {"tipo": "nulo", "valor": nulo, "fin": despues}
+        }
+        variable elementos = []
+        variable cursor = despues
+        variable i = 0
+        mientras (i < cantidad) {
+            variable elemento = _resp_parsear(texto, cursor)
+            si (elemento == nulo) {
+                retornar nulo
+            }
+            elementos = elementos + [elemento["valor"]]
+            cursor = elemento["fin"]
+            i = i + 1
+        }
+        retornar {"tipo": "arreglo", "valor": elementos, "fin": cursor}
+    }
+
+    retornar {"tipo": "error", "valor": "protocolo: marca desconocida '" + marca + "'", "fin": despues}
+}
+
+# ─── Ejecución de comandos ──────────────────────────────────────────
+
+# Envía un comando y devuelve la respuesta parseada completa:
+# {"tipo", "valor", "fin"}. Devuelve nulo si la conexión se cerró.
+funcion comando_crudo(cliente, argumentos) {
+    _socket_enviar(cliente._socket, _resp_codificar(argumentos))
+
+    variable esperando = verdadero
+    variable intentos = 0
+    variable respuesta = nulo
+    mientras (esperando && intentos < 1024) {
+        respuesta = _resp_parsear(cliente._buffer, 0)
+        si (respuesta != nulo) {
+            romper
+        }
+        variable trozo = _socket_recibir(cliente._socket, 8192)
+        si (trozo == nulo || trozo == "") {
+            retornar nulo
+        }
+        cliente._buffer = cliente._buffer + trozo
+        intentos = intentos + 1
+    }
+
+    si (respuesta == nulo) {
+        retornar nulo
+    }
+
+    # Lo que sobró del buffer es la respuesta siguiente (pipelining).
+    variable fin = respuesta["fin"]
+    cliente._buffer = subcadena(cliente._buffer, fin, longitud(cliente._buffer) - fin)
+    retornar respuesta
+}
+
+# Igual que `ejecutar` pero devuelve sólo el valor (o nulo si es error/nulo).
+funcion _respuesta_valor(cliente, argumentos) {
+    variable respuesta = comando_crudo(cliente, argumentos)
+    si (respuesta == nulo) {
+        retornar nulo
+    }
+    si (respuesta["tipo"] == "error") {
+        retornar nulo
+    }
+    retornar respuesta["valor"]
+}
+
+# ─── Comandos de texto ──────────────────────────────────────────────
+
+funcion fijar(cliente, clave: Texto, valor: Texto) -> Logico {
+    variable respuesta = comando_crudo(cliente, ["SET", clave, a_texto(valor)])
+    si (respuesta == nulo) {
+        retornar falso
+    }
+    retornar respuesta["tipo"] == "texto" && respuesta["valor"] == "OK"
+}
+
+funcion fijar_por_segundos(cliente, clave: Texto, valor: Texto, segundos: Entero) -> Logico {
+    variable respuesta = comando_crudo(cliente, ["SET", clave, a_texto(valor), "EX", a_texto(segundos)])
+    si (respuesta == nulo) {
+        retornar falso
+    }
+    retornar respuesta["tipo"] == "texto" && respuesta["valor"] == "OK"
+}
+
+funcion traer(cliente, clave: Texto) {
+    retornar _respuesta_valor(cliente, ["GET", clave])
+}
+
+funcion eliminar(cliente, clave: Texto) -> Entero {
+    variable borradas = _respuesta_valor(cliente, ["DEL", clave])
+    si (borradas == nulo) {
+        retornar 0
+    }
+    retornar borradas
+}
+
+funcion existe(cliente, clave: Texto) -> Logico {
+    variable cantidad = _respuesta_valor(cliente, ["EXISTS", clave])
+    retornar cantidad == 1
+}
+
+funcion expirar(cliente, clave: Texto, segundos: Entero) -> Logico {
+    variable resultado = _respuesta_valor(cliente, ["EXPIRE", clave, a_texto(segundos)])
+    retornar resultado == 1
+}
+
+funcion segundos_de_vida(cliente, clave: Texto) -> Entero {
+    variable ttl = _respuesta_valor(cliente, ["TTL", clave])
+    si (ttl == nulo) {
+        retornar -1
+    }
+    retornar ttl
+}
+
+# ─── Contadores ─────────────────────────────────────────────────────
+
+funcion incrementar(cliente, clave: Texto) -> Entero {
+    variable valor = _respuesta_valor(cliente, ["INCR", clave])
+    si (valor == nulo) {
+        retornar 0
+    }
+    retornar valor
+}
+
+funcion incrementar_en(cliente, clave: Texto, delta: Entero) -> Entero {
+    variable valor = _respuesta_valor(cliente, ["INCRBY", clave, a_texto(delta)])
+    si (valor == nulo) {
+        retornar 0
+    }
+    retornar valor
+}
+
+# ─── Hashes ─────────────────────────────────────────────────────────
+
+funcion hash_fijar(cliente, clave: Texto, campo: Texto, valor: Texto) -> Logico {
+    variable agregados = _respuesta_valor(cliente, ["HSET", clave, campo, a_texto(valor)])
+    retornar agregados >= 0
+}
+
+funcion hash_obtener(cliente, clave: Texto, campo: Texto) {
+    retornar _respuesta_valor(cliente, ["HGET", clave, campo])
+}
+
+# HGETALL como mapa. Los valores de un hash son texto.
+funcion hash_obtener_todo(cliente, clave: Texto) {
+    variable plano = _respuesta_valor(cliente, ["HGETALL", clave])
+    variable hash = {}
+    si (plano == nulo) {
+        retornar hash
+    }
+    variable i = 0
+    mientras (i + 1 < longitud(plano)) {
+        hash[a_texto(plano[i])] = a_texto(plano[i + 1])
+        i = i + 2
+    }
+    retornar hash
+}
+
+funcion hash_eliminar(cliente, clave: Texto, campo: Texto) -> Entero {
+    variable borrados = _respuesta_valor(cliente, ["HDEL", clave, campo])
+    si (borrados == nulo) {
+        retornar 0
+    }
+    retornar borrados
+}
+
+# ─── Listas (colas) ─────────────────────────────────────────────────
+
+funcion lista_empujar(cliente, clave: Texto, valor: Texto) -> Entero {
+    variable largo = _respuesta_valor(cliente, ["LPUSH", clave, a_texto(valor)])
+    si (largo == nulo) {
+        retornar 0
+    }
+    retornar largo
+}
+
+funcion lista_sacar(cliente, clave: Texto) {
+    retornar _respuesta_valor(cliente, ["RPOP", clave])
+}
+
+funcion lista_largo(cliente, clave: Texto) -> Entero {
+    variable largo = _respuesta_valor(cliente, ["LLEN", clave])
+    si (largo == nulo) {
+        retornar 0
+    }
+    retornar largo
+}
+
+# ─── Publicación ────────────────────────────────────────────────────
+
+# `canal` es palabra reservada del lenguaje: por eso el parámetro se llama
+# `nombre_canal`.
+funcion publicar(cliente, nombre_canal: Texto, mensaje: Texto) -> Entero {
+    variable suscriptores = _respuesta_valor(cliente, ["PUBLISH", nombre_canal, a_texto(mensaje)])
+    si (suscriptores == nulo) {
+        retornar 0
+    }
+    retornar suscriptores
+}
+
+# ─── Utilidades ─────────────────────────────────────────────────────
+
+funcion ping(cliente) -> Texto {
+    variable respuesta = _respuesta_valor(cliente, ["PING"])
+    si (respuesta == nulo) {
+        retornar ""
+    }
+    retornar a_texto(respuesta)
+}
+
+funcion autenticar(cliente, clave: Texto) -> Logico {
+    variable respuesta = comando_crudo(cliente, ["AUTH", clave])
+    si (respuesta == nulo) {
+        retornar falso
+    }
+    retornar respuesta["tipo"] == "texto"
+}
+
+funcion seleccionar(cliente, base: Entero) -> Logico {
+    variable respuesta = comando_crudo(cliente, ["SELECT", a_texto(base)])
+    si (respuesta == nulo) {
+        retornar falso
+    }
+    retornar respuesta["tipo"] == "texto"
+}
+
+# Lee bytes crudos del socket (para suscripciones: `SUBSCRIBE` + este bucle).
+funcion recibir_crudo(cliente, max_bytes: Entero) {
+    variable trozo = _socket_recibir(cliente._socket, max_bytes)
+    si (trozo == nulo) {
+        retornar ""
+    }
+    retornar trozo
+}

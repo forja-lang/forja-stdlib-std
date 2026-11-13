@@ -1,0 +1,302 @@
+# modulo: sesion
+# Descripcion: Sesiones con cookie firmada, almacén con expiración y CSRF
+#
+# Uso: importar "std/sesion"
+#
+#   variable almacen = sesion.almacen("secreto-de-32-bytes", 3600, falso)
+#   variable s = sesion.leer_de_solicitud(almacen, solicitud)
+#   si (s == nulo) {
+#       s = sesion.crear(almacen, {"usuario": 7})
+#       sesion.fijar_cookie(respuesta, almacen, s)
+#   }
+#   variable token = sesion.token_csrf(almacen, s)      # va en el formulario
+#   si (!sesion.csrf_valido(almacen, s, enviado)) { ... 403 ... }
+#
+# Fase 3 del plan web. El almacén en memoria sirve para un proceso; para varios
+# procesos hace falta el de Redis (`std/redis`, HGETALL/HSET ya están).
+#
+# Comparaciones de firma con `_constant_time_equal` (no `==`): no filtrar por
+# tiempo cuántos caracteres coincidían.
+
+importar "std/hash"
+importar "std/crypto"
+importar "std/json"
+importar "std/resultado"
+importar "std/redis"
+
+# ─── Clases ─────────────────────────────────────────────────────────
+
+clase Sesion {
+    id
+    datos
+    creada_ms
+    expira_ms
+
+    constructor(id: Texto, datos, creada_ms: Entero, expira_ms: Entero) {
+        este.id = id
+        este.datos = datos
+        este.creada_ms = creada_ms
+        este.expira_ms = expira_ms
+    }
+}
+
+clase Almacen {
+    secreto
+    duracion_ms
+    seguro
+    same_site
+    _sesiones
+    # nulo = sesiones en memoria del proceso; si no, cliente de std/redis.
+    _redis
+
+    constructor(secreto: Texto, duracion_segundos: Entero, seguro: Logico) {
+        este.secreto = secreto
+        este.duracion_ms = duracion_segundos * 1000
+        este.seguro = seguro
+        este.same_site = "Lax"
+        este._sesiones = {}
+        este._redis = nulo
+    }
+}
+
+# ─── Almacén ────────────────────────────────────────────────────────
+
+# `seguro` en verdadero agrega `Secure` a la cookie: hace falta HTTPS.
+funcion almacen(secreto: Texto, duracion_segundos: Entero, seguro: Logico) {
+    retornar nuevo Almacen(secreto, duracion_segundos, seguro)
+}
+
+# Almacén en Redis: las sesiones sobreviven al reinicio y las comparten varios
+# procesos. Cada sesión es una clave `sesion:<id>` con el JSON de la sesión y
+# TTL en Redis (el `expira_ms` propio manda; el TTL es la red de seguridad).
+funcion almacen_redis(cliente_redis, secreto: Texto, duracion_segundos: Entero, seguro: Logico) {
+    variable nuevo_almacen = nuevo Almacen(secreto, duracion_segundos, seguro)
+    nuevo_almacen._redis = cliente_redis
+    retornar nuevo_almacen
+}
+
+funcion _usa_redis(almacen_sesiones) -> Logico {
+    retornar almacen_sesiones._redis != nulo
+}
+
+funcion _clave_de(id: Texto) -> Texto {
+    retornar "sesion:" + id
+}
+
+# Guarda la sesión (sólo camino Redis).
+funcion _guardar_en_redis(almacen_sesiones, sesion_actual) -> Logico {
+    variable texto = resultado.desenvolver(json.serializar({
+        "id": sesion_actual.id,
+        "datos": sesion_actual.datos,
+        "creada_ms": sesion_actual.creada_ms,
+        "expira_ms": sesion_actual.expira_ms
+    }))
+    si (texto == nulo) {
+        retornar falso
+    }
+    # TTL un minuto más largo que la expiración propia: si el proceso no llega a
+    # borrarla, Redis la limpia solo.
+    variable segundos = (sesion_actual.expira_ms - _ahora_ms()) / 1000 + 60
+    si (segundos < 1) {
+        segundos = 1
+    }
+    retornar redis.fijar_por_segundos(almacen_sesiones._redis, _clave_de(sesion_actual.id), a_texto(texto), segundos)
+}
+
+# Lee la sesión de Redis y valida su expiración propia.
+funcion _leer_de_redis(almacen_sesiones, id: Texto) {
+    variable crudo = redis.traer(almacen_sesiones._redis, _clave_de(id))
+    si (crudo == nulo || crudo == "") {
+        retornar nulo
+    }
+    variable plano = resultado.desenvolver(json.parsear(a_texto(crudo)))
+    si (plano == nulo) {
+        retornar nulo
+    }
+    variable recuperada = nuevo Sesion(plano["id"], plano["datos"], plano["creada_ms"], plano["expira_ms"])
+    si (recuperada.expira_ms <= _ahora_ms()) {
+        redis.eliminar(almacen_sesiones._redis, _clave_de(id))
+        retornar nulo
+    }
+    retornar recuperada
+}
+
+funcion _ahora_ms() -> Entero {
+    retornar _sistema_tiempo_ms()
+}
+
+# ─── Cookies firmadas ───────────────────────────────────────────────
+
+# Firma un id: `id.firma`. La firma es HMAC-SHA256(secreto, id) en hex.
+funcion firmar(id: Texto, secreto: Texto) -> Texto {
+    variable firma = _hmac_sha256(secreto, id)
+    retornar id + "." + firma
+}
+
+# Devuelve el id si la firma es válida; nulo si fue alterada o la clave no es.
+funcion verificar(cookie: Texto, secreto: Texto) {
+    variable pos = indice_de(cookie, ".")
+    si (pos <= 0) {
+        retornar nulo
+    }
+    variable id = subcadena(cookie, 0, pos)
+    variable firma = subcadena(cookie, pos + 1, longitud(cookie) - (pos + 1))
+    variable esperada = _hmac_sha256(secreto, id)
+    si (!_constant_time_equal(firma, esperada)) {
+        retornar nulo
+    }
+    retornar id
+}
+
+# ─── CRUD de sesiones ───────────────────────────────────────────────
+
+funcion crear(almacen_sesiones, datos) {
+    variable id = _random_bytes(32)
+    variable ahora = _ahora_ms()
+    variable nueva = nuevo Sesion(id, datos, ahora, ahora + almacen_sesiones.duracion_ms)
+    si (_usa_redis(almacen_sesiones)) {
+        _guardar_en_redis(almacen_sesiones, nueva)
+        retornar nueva
+    }
+    almacen_sesiones._sesiones[id] = nueva
+    retornar nueva
+}
+
+# Devuelve la sesión vigente o nulo. Si expiró, la borra.
+funcion buscar(almacen_sesiones, id: Texto) {
+    si (id == nulo || id == "") {
+        retornar nulo
+    }
+    si (_usa_redis(almacen_sesiones)) {
+        retornar _leer_de_redis(almacen_sesiones, id)
+    }
+    variable encontrada = almacen_sesiones._sesiones[id]
+    si (encontrada == nulo) {
+        retornar nulo
+    }
+    si (encontrada.expira_ms <= _ahora_ms()) {
+        almacen_sesiones._sesiones[id] = nulo
+        retornar nulo
+    }
+    retornar encontrada
+}
+
+funcion invalidar(almacen_sesiones, id: Texto) {
+    si (_usa_redis(almacen_sesiones)) {
+        redis.eliminar(almacen_sesiones._redis, _clave_de(id))
+        retornar nulo
+    }
+    almacen_sesiones._sesiones[id] = nulo
+    retornar nulo
+}
+
+# Extiende la vida de una sesión (para "recordarme" o actividad).
+funcion renovar(almacen_sesiones, sesion_actual) {
+    sesion_actual.expira_ms = _ahora_ms() + almacen_sesiones.duracion_ms
+    si (_usa_redis(almacen_sesiones)) {
+        _guardar_en_redis(almacen_sesiones, sesion_actual)
+        retornar sesion_actual
+    }
+    almacen_sesiones._sesiones[sesion_actual.id] = sesion_actual
+    retornar sesion_actual
+}
+
+# Cambia el id conservando los datos: obligatorio al iniciar sesión (evita
+# fijación de sesión).
+funcion rotar(almacen_sesiones, sesion_actual) {
+    # El id viejo se borra en los dos almacenes: si no, rotar no rotaba nada.
+    invalidar(almacen_sesiones, sesion_actual.id)
+    variable id_nuevo = _random_bytes(32)
+    variable ahora = _ahora_ms()
+    variable renovada = nuevo Sesion(id_nuevo, sesion_actual.datos, sesion_actual.creada_ms, ahora + almacen_sesiones.duracion_ms)
+    si (_usa_redis(almacen_sesiones)) {
+        _guardar_en_redis(almacen_sesiones, renovada)
+        retornar renovada
+    }
+    almacen_sesiones._sesiones[id_nuevo] = renovada
+    retornar renovada
+}
+
+funcion limpiar_expiradas(almacen_sesiones) -> Entero {
+    si (_usa_redis(almacen_sesiones)) {
+        # Redis expira solo: no hay nada que barrer.
+        retornar 0
+    }
+    variable lista = claves(almacen_sesiones._sesiones)
+    variable borradas = 0
+    variable ahora = _ahora_ms()
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        variable candidata = almacen_sesiones._sesiones[lista[i]]
+        si (candidata == nulo || candidata.expira_ms <= ahora) {
+            almacen_sesiones._sesiones[lista[i]] = nulo
+            borradas = borradas + 1
+        }
+        i = i + 1
+    }
+    retornar borradas
+}
+
+funcion cantidad(almacen_sesiones) -> Entero {
+    si (_usa_redis(almacen_sesiones)) {
+        # Contar en Redis necesita SCAN/KEYS, que el cliente todavía no expone.
+        retornar -1
+    }
+    variable lista = claves(almacen_sesiones._sesiones)
+    variable vivas = 0
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        si (almacen_sesiones._sesiones[lista[i]] != nulo) {
+            vivas = vivas + 1
+        }
+        i = i + 1
+    }
+    retornar vivas
+}
+
+# ─── Integración con el servidor ────────────────────────────────────
+
+# Lee la sesión de la cookie `sid` de la solicitud (firmada y vigente).
+funcion leer_de_solicitud(almacen_sesiones, solicitud) {
+    variable cruda = solicitud.cookies["sid"]
+    si (cruda == nulo) {
+        retornar nulo
+    }
+    variable id = verificar(cruda, almacen_sesiones.secreto)
+    si (id == nulo) {
+        retornar nulo
+    }
+    retornar buscar(almacen_sesiones, id)
+}
+
+# Set-Cookie con HttpOnly + SameSite (+ Secure si el almacén es seguro).
+# shortcut: el modelo de cabeceras del servidor es un mapa, así que sólo puede
+# haber un `Set-Cookie` por respuesta; otra cookie necesita otro mecanismo.
+funcion fijar_cookie(respuesta, almacen_sesiones, sesion_actual) {
+    variable valor = firmar(sesion_actual.id, almacen_sesiones.secreto)
+    variable cookie = "sid=" + valor + "; Path=/; HttpOnly; SameSite=" + almacen_sesiones.same_site + "; Max-Age=" + a_texto(almacen_sesiones.duracion_ms / 1000)
+    si (almacen_sesiones.seguro) {
+        cookie = cookie + "; Secure"
+    }
+    respuesta.cabeceras["Set-Cookie"] = cookie
+    retornar respuesta
+}
+
+funcion borrar_cookie(respuesta) {
+    respuesta.cabeceras["Set-Cookie"] = "sid=; Path=/; HttpOnly; Max-Age=0"
+    retornar respuesta
+}
+
+# ─── CSRF ───────────────────────────────────────────────────────────
+
+# Token derivado del id y el secreto: no hace falta guardarlo.
+funcion token_csrf(almacen_sesiones, sesion_actual) -> Texto {
+    retornar _hmac_sha256(almacen_sesiones.secreto, "csrf:" + sesion_actual.id)
+}
+
+funcion csrf_valido(almacen_sesiones, sesion_actual, token: Texto) -> Logico {
+    si (sesion_actual == nulo || token == nulo || token == "") {
+        retornar falso
+    }
+    retornar _constant_time_equal(token, token_csrf(almacen_sesiones, sesion_actual))
+}

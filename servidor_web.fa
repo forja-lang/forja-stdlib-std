@@ -9,11 +9,14 @@
 importar "std/colecciones"
 importar "std/compartido"
 importar "std/log"
+importar "std/ruta"
 
 # ─── Constantes HTTP ────────────────────────────────────────────────
 constante BUFFER_LECTURA = 8192
 # Tope de cabeceras antes de haber encontrado el fin de cabeceras (slowloris).
 constante MAX_CABECERAS = 65536
+# Tope de peticiones atendidas en una misma conexión keep-alive.
+constante MAX_PETICIONES_CONEXION = 100
 
 # ─── Clase ErrorHTTP ────────────────────────────────────────────────
 clase ErrorHTTP {
@@ -35,6 +38,7 @@ clase SolicitudHTTP {
     parametros
     params_ruta
     ip
+    ip_local
     cookies
     archivos
 
@@ -46,6 +50,7 @@ clase SolicitudHTTP {
         este.parametros = {}
         este.params_ruta = {}
         este.ip = ""
+        este.ip_local = ""
         este.cookies = {}
         este.archivos = {}
     }
@@ -72,25 +77,55 @@ clase ServidorWeb {
     _host
     _rutas
     _rutas_params
+    _rutas_nombradas
     _middlewares
     _static_rutas
     _cors
     _corriendo
     _max_cuerpo
     _requests
+    _metricas
+    _inicio_ms
+    _seguridad
+    _hsts
+    # Un `ServidorWeb` no es un grupo: `_servidor` nulo distingue ambos casos
+    # al registrar rutas (`_registrar_ruta` acepta servidor o grupo).
+    _servidor
+    _prefijo
 
     constructor(puerto: Entero) {
         este._puerto = puerto
         este._host = "0.0.0.0"
         este._rutas = {}
         este._rutas_params = {}
+        este._rutas_nombradas = {}
         este._middlewares = []
         este._static_rutas = {}
         este._cors = falso
         este._corriendo = falso
         este._max_cuerpo = 10485760
+        este._servidor = nulo
+        este._prefijo = ""
         # Contador de requests en una celda compartida: sobrevive a los hilos.
         este._requests = compartido.nueva(0)
+        # Contadores por código de estado. `shortcut: es un mapa del proceso, no
+        # compartido entre hilos; cuando haya pool de hilos pasa a `compartido`.
+        este._metricas = {}
+        este._inicio_ms = 0
+        este._seguridad = falso
+        este._hsts = falso
+    }
+}
+
+# Grupo de rutas: registra siempre bajo un prefijo común.
+# `Servidor.grupo("/api", func(g) { ... })` → las rutas cuelgan de `/api`.
+clase GrupoRutas {
+    _servidor
+    _prefijo
+
+    constructor(servidor, prefijo: Texto) {
+        este._servidor = servidor
+        este._prefijo = prefijo
     }
 }
 
@@ -157,14 +192,34 @@ funcion _longitud_de_cuerpo(cabeceras_texto: Texto) -> Entero {
     retornar 0
 }
 
-# Lee el request completo. Devuelve nulo si no hay datos o si se excede el tope.
-funcion _leer_solicitud(socket, max_cuerpo: Entero) {
-    variable datos = ""
-    variable fin_cabeceras = -1
+# Lee el request completo.
+# Devuelve el mapa {datos, resto}, o un centinela:
+#   -2 → el cuerpo supera `max_cuerpo` (413)
+#   -3 → las cabeceras superan `MAX_CABECERAS` (431)
+#   nulo → no hay datos / conexión cerrada
+#
+# `resto` son los bytes que ya se leyeron de la conexión y pertenecen al
+# siguiente request (keep-alive/pipelining): se anteponen a lo que se lea.
+# Devuelve {"datos": el request, "resto": lo que sobra} — si sobra algo, el
+# request ya estaba completo en `resto` y no hace falta tocar el socket.
+funcion _leer_solicitud(socket, max_cuerpo: Entero, resto: Texto) {
+    variable datos = resto
+    variable fin_cabeceras = indice_de(datos, "\r\n\r\n")
     variable cuerpo_esperado = 0
     variable iteraciones = 0
 
+    si (fin_cabeceras >= 0) {
+        cuerpo_esperado = _longitud_de_cuerpo(subcadena(datos, 0, fin_cabeceras))
+        si (cuerpo_esperado > max_cuerpo) {
+            retornar {"datos": "", "resto": "", "error": 413}
+        }
+    }
+
     mientras (verdadero) {
+        si (fin_cabeceras >= 0 && longitud(datos) - (fin_cabeceras + 4) >= cuerpo_esperado) {
+            romper
+        }
+
         variable trozo = _socket_recibir(socket, BUFFER_LECTURA)
         si (trozo == nulo || trozo == "") {
             romper
@@ -172,9 +227,8 @@ funcion _leer_solicitud(socket, max_cuerpo: Entero) {
         datos = datos + trozo
 
         si (fin_cabeceras < 0 && longitud(datos) > MAX_CABECERAS) {
-            # Cabeceras gigantes sin terminar (slowloris): se corta.
-            # shortcut: no se responde 431, se cierra el socket.
-            retornar nulo
+            # Cabeceras gigantes sin terminar (slowloris).
+            retornar {"datos": "", "resto": "", "error": 431}
         }
 
         si (fin_cabeceras < 0) {
@@ -183,15 +237,8 @@ funcion _leer_solicitud(socket, max_cuerpo: Entero) {
                 variable cabeceras_texto = subcadena(datos, 0, fin_cabeceras)
                 cuerpo_esperado = _longitud_de_cuerpo(cabeceras_texto)
                 si (cuerpo_esperado > max_cuerpo) {
-                    retornar nulo
+                    retornar {"datos": "", "resto": "", "error": 413}
                 }
-            }
-        }
-
-        si (fin_cabeceras >= 0) {
-            variable cuerpo_recibido = longitud(datos) - (fin_cabeceras + 4)
-            si (cuerpo_recibido >= cuerpo_esperado) {
-                romper
             }
         }
 
@@ -204,7 +251,47 @@ funcion _leer_solicitud(socket, max_cuerpo: Entero) {
     si (longitud(datos) == 0) {
         retornar nulo
     }
-    retornar datos
+    si (fin_cabeceras < 0) {
+        # Cabeceras incompletas: se entregan igual y el parser responde 400.
+        retornar {"datos": datos, "resto": "", "error": 0}
+    }
+
+    variable consumido = fin_cabeceras + 4 + cuerpo_esperado
+    si (consumido > longitud(datos)) {
+        consumido = longitud(datos)
+    }
+    variable excedente = ""
+    si (longitud(datos) > consumido) {
+        excedente = subcadena(datos, consumido, longitud(datos) - consumido)
+    }
+    retornar {"datos": subcadena(datos, 0, consumido), "resto": excedente, "error": 0}
+}
+
+# ─── Keep-alive ─────────────────────────────────────────────────────
+#
+# HTTP/1.1 reutiliza la conexión por defecto salvo `Connection: close`;
+# HTTP/1.0 hace lo contrario (sólo reutiliza si el cliente lo pide).
+funcion _mantener_conexion(datos_raw: Texto, cabeceras) -> Logico {
+    variable conexion = cabeceras["connection"]
+    si (conexion != nulo) {
+        retornar contiene(a_minusculas(conexion), "keep-alive")
+    }
+    variable primera_linea = dividir(datos_raw, "\r\n")[0]
+    retornar contiene(primera_linea, "HTTP/1.1")
+}
+
+# Fija la cabecera `Connection` de la respuesta y dice si se reutiliza.
+funcion _fijar_conexion(respuesta, datos_raw: Texto, cabeceras) -> Logico {
+    variable mantener = _mantener_conexion(datos_raw, cabeceras)
+    si (respuesta.cabeceras["Connection"] == "close") {
+        mantener = falso
+    }
+    si (mantener) {
+        respuesta.cabeceras["Connection"] = "keep-alive"
+    } sino {
+        respuesta.cabeceras["Connection"] = "close"
+    }
+    retornar mantener
 }
 
 # ─── Funciones de creacion de respuestas ────────────────────────────
@@ -239,10 +326,17 @@ funcion error_respuesta(respuesta, codigo: Entero) {
 
 # ─── Funciones de enrutamiento ──────────────────────────────────────
 
-funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
+funcion _registrar_ruta(contenedor, metodo: Texto, mut ruta: Texto, manejador) {
+    variable servidor = contenedor
+    si (contenedor._servidor != nulo) {
+        servidor = contenedor._servidor
+        ruta = contenedor._prefijo + ruta
+    }
+
     variable partes_ruta = dividir(ruta, "/")
     variable params_encontrados = []
     variable patron = []
+    variable tiene_comodin = falso
     variable i = 0
     mientras (i < longitud(partes_ruta)) {
         variable parte = partes_ruta[i]
@@ -250,6 +344,9 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
             params_encontrados = params_encontrados + [subcadena(parte, 1, longitud(parte) - 1)]
             patron = patron + ["(:param)"]
         } sino {
+            si (parte == "*") {
+                tiene_comodin = verdadero
+            }
             patron = patron + [parte]
         }
         i = i + 1
@@ -262,7 +359,7 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
         servidor._rutas_params[metodo] = {}
     }
 
-    si (longitud(params_encontrados) > 0) {
+    si (longitud(params_encontrados) > 0 || tiene_comodin) {
         servidor._rutas_params[metodo][patron_str] = {
             "params": params_encontrados,
             "manejador": manejador
@@ -270,6 +367,62 @@ funcion _registrar_ruta(servidor, metodo: Texto, ruta: Texto, manejador) {
     } sino {
         servidor._rutas[metodo][ruta] = manejador
     }
+}
+
+# Devuelve un grupo de rutas que registra bajo un prefijo común:
+#
+#     variable api = servidor_web.grupo(servidor, "/api")
+#     servidor_web.registrar_obtener(api, "/tareas", listar)
+#     servidor_web.nombrar_ruta(api, "tareas", "/tareas")
+#
+# No recibe callback a propósito: un parámetro con el nombre de una función de
+# la stdlib (que vive en el namespace global, N17) se resuelve a la global (N4).
+funcion grupo(servidor, prefijo: Texto) {
+    retornar nuevo GrupoRutas(servidor, prefijo)
+}
+
+# Nombra una ruta ya registrada para poder construir su URL después.
+funcion nombrar_ruta(servidor, nombre: Texto, mut ruta: Texto) {
+    variable base = servidor
+    si (servidor._servidor != nulo) {
+        base = servidor._servidor
+        ruta = servidor._prefijo + ruta
+    }
+    base._rutas_nombradas[nombre] = ruta
+}
+
+# Construye la URL de una ruta nombrada sustituyendo `:param` por `params[param]`.
+# Devuelve "" si el nombre no existe.
+funcion url_de(servidor, nombre: Texto, params) -> Texto {
+    variable base = servidor
+    si (servidor._servidor != nulo) {
+        base = servidor._servidor
+    }
+    variable patron = base._rutas_nombradas[nombre]
+    si (patron == nulo) {
+        retornar ""
+    }
+
+    variable partes = dividir(patron, "/")
+    variable salida = []
+    variable i = 0
+    mientras (i < longitud(partes)) {
+        variable parte = partes[i]
+        si (longitud(parte) > 0 && parte[0] == ":") {
+            variable valor = ""
+            si (params != nulo) {
+                variable v = params[subcadena(parte, 1, longitud(parte) - 1)]
+                si (v != nulo) {
+                    valor = a_texto(v)
+                }
+            }
+            salida = salida + [valor]
+        } sino {
+            salida = salida + [parte]
+        }
+        i = i + 1
+    }
+    retornar unir_elementos(salida, "/")
 }
 
 funcion registrar_obtener(servidor, ruta: Texto, manejador) {
@@ -302,12 +455,226 @@ funcion servir_estaticos(servidor, prefijo: Texto, directorio: Texto) {
     servidor._static_rutas[prefijo] = directorio
 }
 
+# ─── Archivos estáticos ─────────────────────────────────────────────
+#
+# Se sirven con MIME, `ETag`, `304` y `HEAD`. Los binarios (png, wasm, woff2…)
+# necesitan enviar bytes crudos y no hay `_socket_enviar_binario` todavía:
+# por ahora responden 415 en vez de mandar el archivo corrupto.
+# shortcut: 415 para binarios hasta que exista el envío binario (Fase 4).
+constante EXTENSIONES_BINARIAS = "png,jpg,jpeg,gif,webp,ico,woff,woff2,ttf,otf,wasm,zip,pdf,mp4,mp3,br,gz"
+
+funcion _info_archivo(ruta_archivo: Texto) {
+    variable crudo = _archivo_info(ruta_archivo)
+    si (crudo == -1) {
+        retornar nulo
+    }
+    variable info = {}
+    variable partes = dividir(crudo, ";")
+    variable i = 0
+    mientras (i < longitud(partes)) {
+        variable par = dividir(partes[i], ":")
+        si (longitud(par) == 2) {
+            info[par[0]] = par[1]
+        }
+        i = i + 1
+    }
+    retornar info
+}
+
+funcion _tipo_mime(archivo: Texto) -> Texto {
+    variable tipo = a_minusculas(ruta.extension(archivo))
+    si (tipo == "html" || tipo == "htm") { retornar "text/html; charset=utf-8" }
+    si (tipo == "css") { retornar "text/css; charset=utf-8" }
+    si (tipo == "js" || tipo == "mjs") { retornar "text/javascript; charset=utf-8" }
+    si (tipo == "json" || tipo == "map" || tipo == "webmanifest") { retornar "application/json; charset=utf-8" }
+    si (tipo == "txt" || tipo == "md" || tipo == "csv" || tipo == "log") { retornar "text/plain; charset=utf-8" }
+    si (tipo == "svg") { retornar "image/svg+xml" }
+    si (tipo == "xml") { retornar "application/xml; charset=utf-8" }
+    retornar "application/octet-stream"
+}
+
+funcion _es_extension_binaria(archivo: Texto) -> Logico {
+    variable tipo = a_minusculas(ruta.extension(archivo))
+    variable lista = dividir(EXTENSIONES_BINARIAS, ",")
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        si (lista[i] == tipo) {
+            retornar verdadero
+        }
+        i = i + 1
+    }
+    retornar falso
+}
+
+# Prefijo estático registrado más largo que matchea la ruta ("" si ninguno).
+funcion _prefijo_estatico(servidor, ruta_pedida: Texto) -> Texto {
+    variable lista = claves(servidor._static_rutas)
+    variable mejor = ""
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        variable prefijo = lista[i]
+        si (empieza_con(ruta_pedida, prefijo) && longitud(prefijo) > longitud(mejor)) {
+            mejor = prefijo
+        }
+        i = i + 1
+    }
+    retornar mejor
+}
+
+# Ruta relativa al directorio estático, o nulo si intenta escaparse del mismo.
+funcion _relativa_segura(ruta_pedida: Texto, prefijo: Texto) {
+    variable rel = subcadena(ruta_pedida, longitud(prefijo), longitud(ruta_pedida) - longitud(prefijo))
+    mientras (empieza_con(rel, "/")) {
+        rel = subcadena(rel, 1, longitud(rel) - 1)
+    }
+    si (contiene(rel, "..") || contiene(rel, "\\") || contiene(rel, ":") || contiene(rel, "//")) {
+        retornar nulo
+    }
+    retornar rel
+}
+
+funcion _respuesta_estatica(servidor, ruta_pedida: Texto, cabeceras, metodo: Texto) {
+    variable respuesta = nuevo RespuestaHTTP()
+    si (metodo != "GET" && metodo != "HEAD") {
+        respuesta = error_respuesta(respuesta, 405)
+        respuesta.cabeceras["Allow"] = "GET, HEAD"
+        retornar respuesta
+    }
+
+    variable prefijo = _prefijo_estatico(servidor, ruta_pedida)
+    si (prefijo == "") {
+        retornar error_respuesta(respuesta, 404)
+    }
+
+    variable rel = _relativa_segura(ruta_pedida, prefijo)
+    si (rel == nulo) {
+        retornar error_respuesta(respuesta, 403)
+    }
+    si (rel == "") {
+        rel = "index.html"
+    }
+
+    variable archivo = servidor._static_rutas[prefijo] + "/" + rel
+    # Chequeo previo para no hacer que el nativo loguee "archivo_no_encontrado"
+    # en cada 404 (el log es del servidor, no del cliente).
+    si (_archivo_existe(archivo) == falso) {
+        retornar error_respuesta(respuesta, 404)
+    }
+    variable info = _info_archivo(archivo)
+    si (info == nulo) {
+        retornar error_respuesta(respuesta, 404)
+    }
+    si (info["es_directorio"] == "true") {
+        archivo = archivo + "/index.html"
+        si (_archivo_existe(archivo) == falso) {
+            retornar error_respuesta(respuesta, 404)
+        }
+        info = _info_archivo(archivo)
+        si (info == nulo || info["es_directorio"] == "true") {
+            retornar error_respuesta(respuesta, 404)
+        }
+    }
+
+    variable etag = "\"" + info["modificado"] + "-" + info["tamano"] + "\""
+    respuesta.cabeceras["ETag"] = etag
+    variable if_none_match = cabeceras["if-none-match"]
+    si (if_none_match != nulo && contiene(if_none_match, info["modificado"] + "-" + info["tamano"])) {
+        respuesta.codigo = 304
+        respuesta.cuerpo = ""
+        retornar respuesta
+    }
+
+    si (_es_extension_binaria(archivo)) {
+        retornar error_respuesta(respuesta, 415)
+    }
+    variable contenido = _archivo_leer(archivo)
+    si (contenido == -1) {
+        # No es UTF-8 válido (o desapareció entre el stat y la lectura).
+        retornar error_respuesta(respuesta, 415)
+    }
+
+    variable tipo = _tipo_mime(archivo)
+    respuesta.tipo_contenido = tipo
+    respuesta.cabeceras["Content-Type"] = tipo
+    respuesta.cuerpo = contenido
+    si (metodo == "HEAD") {
+        respuesta.cabeceras["Content-Length"] = info["tamano"]
+        respuesta.cuerpo = ""
+    }
+    retornar respuesta
+}
+
+# `HEAD` se responde como `GET` pero sin cuerpo, con el `Content-Length` real.
+# `longitud()` en Forja cuenta bytes, que es justo lo que pide la cabecera.
+funcion _aplicar_head(metodo: Texto, respuesta) {
+    si (metodo == "HEAD") {
+        si (respuesta.cabeceras["Content-Length"] == nulo) {
+            respuesta.cabeceras["Content-Length"] = a_texto(longitud(respuesta.cuerpo))
+        }
+        respuesta.cuerpo = ""
+    }
+}
+
 funcion habilitar_cors(servidor) {
     servidor._cors = verdadero
 }
 
+# Registra `/salud` (healthcheck) y `/metricas` (requests por código de estado).
+# No se registran solos: una ruta pública de más es una fuga de información.
+funcion habilitar_salud(servidor) {
+    registrar_obtener(servidor, "/salud", func(peticion, respuesta) {
+        variable cuerpo_json = "{\"estado\":\"ok\",\"requests\":" + a_texto(compartido.valor(servidor._requests)) +
+            ",\"uptime_ms\":" + a_texto(_sistema_tiempo_ms() - servidor._inicio_ms) + "}"
+        variable r = texto_plano(respuesta, cuerpo_json)
+        r.tipo_contenido = "application/json; charset=utf-8"
+        r.cabeceras["Content-Type"] = r.tipo_contenido
+        retornar r
+    })
+
+    registrar_obtener(servidor, "/metricas", func(peticion, respuesta) {
+        variable partes = []
+        variable lista = claves(servidor._metricas)
+        variable i = 0
+        mientras (i < longitud(lista)) {
+            partes = partes + ["\"" + lista[i] + "\":" + a_texto(servidor._metricas[lista[i]])]
+            i = i + 1
+        }
+        variable r = texto_plano(respuesta, "{" + unir_elementos(partes, ",") + "}")
+        r.tipo_contenido = "application/json; charset=utf-8"
+        r.cabeceras["Content-Type"] = r.tipo_contenido
+        retornar r
+    })
+}
+
 funcion fijar_max_cuerpo(servidor, max_bytes: Entero) {
     servidor._max_cuerpo = max_bytes
+}
+
+# Cabeceras de seguridad por defecto en todas las respuestas. `hsts` sólo tiene
+# sentido con HTTPS: no se activa solo para no enseñarle al navegador a exigir
+# TLS en un servidor que todavía es HTTP.
+# Lo que el handler ya haya fijado no se pisa.
+funcion habilitar_seguridad(servidor, hsts: Logico) {
+    servidor._seguridad = verdadero
+    servidor._hsts = hsts
+}
+
+funcion _cabeceras_seguridad(respuesta, hsts: Logico) {
+    si (respuesta.cabeceras["X-Content-Type-Options"] == nulo) {
+        respuesta.cabeceras["X-Content-Type-Options"] = "nosniff"
+    }
+    si (respuesta.cabeceras["X-Frame-Options"] == nulo) {
+        respuesta.cabeceras["X-Frame-Options"] = "DENY"
+    }
+    si (respuesta.cabeceras["Referrer-Policy"] == nulo) {
+        respuesta.cabeceras["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    }
+    si (respuesta.cabeceras["Content-Security-Policy"] == nulo) {
+        respuesta.cabeceras["Content-Security-Policy"] = "default-src 'self'"
+    }
+    si (hsts && respuesta.cabeceras["Strict-Transport-Security"] == nulo) {
+        respuesta.cabeceras["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    }
 }
 
 # ─── Resolucion de rutas ────────────────────────────────────────────
@@ -319,52 +686,138 @@ funcion _resolver_ruta(servidor, metodo: Texto, ruta: Texto) {
     }
 
     variable rutas_params = servidor._rutas_params[metodo]
-    si (rutas_params != nulo) {
-        variable lista_claves = claves(rutas_params)
-        variable i = 0
-        mientras (i < longitud(lista_claves)) {
-            variable info = rutas_params[lista_claves[i]]
-            variable partes_ruta = dividir(ruta, "/")
-            variable partes_clave = dividir(lista_claves[i], "/")
+    si (rutas_params == nulo) {
+        retornar nulo
+    }
 
-            si (longitud(partes_ruta) == longitud(partes_clave)) {
-                variable params_encontrados = {}
-                variable coincide = verdadero
-                variable j = 0
-                variable idx_param = 0
-                mientras (j < longitud(partes_ruta)) {
-                    variable pr = partes_ruta[j]
-                    variable pc = partes_clave[j]
-                    si (pc == "(:param)") {
-                        si (idx_param < longitud(info["params"])) {
-                            params_encontrados[info["params"][idx_param]] = pr
-                        }
-                        idx_param = idx_param + 1
-                    } sino {
-                        si (pr != pc) {
-                            coincide = falso
-                            romper
-                        }
-                    }
-                    j = j + 1
-                }
-                si (coincide) {
-                    retornar {"manejador": info["manejador"], "params": params_encontrados}
-                }
-            }
-            i = i + 1
+    # Prioridad determinista: gana el patrón con más segmentos literales
+    # (estático > param > comodín), sin depender del orden de un mapa.
+    variable mejor = nulo
+    variable mejor_puntaje = -1
+    variable lista_claves = claves(rutas_params)
+    variable i = 0
+    mientras (i < longitud(lista_claves)) {
+        variable info = rutas_params[lista_claves[i]]
+        variable coincidencia = _coincidir_patron(lista_claves[i], ruta, info["params"])
+        si (coincidencia != nulo && coincidencia["puntaje"] > mejor_puntaje) {
+            mejor_puntaje = coincidencia["puntaje"]
+            mejor = {"manejador": info["manejador"], "params": coincidencia["params"]}
+        }
+        i = i + 1
+    }
+    retornar mejor
+}
+
+# Devuelve {"params": {...}, "puntaje": n} si `ruta` matchea `patron`, o nulo.
+# `*` como último segmento captura el resto de la ruta en `params["*"]`.
+# El puntaje pesa los segmentos literales por posición (más a la izquierda, más peso).
+funcion _coincidir_patron(patron: Texto, ruta: Texto, nombres_params) {
+    variable partes_ruta = dividir(ruta, "/")
+    variable partes_clave = dividir(patron, "/")
+    variable n_ruta = longitud(partes_ruta)
+    variable n_clave = longitud(partes_clave)
+
+    variable comodin = falso
+    si (n_clave > 0 && partes_clave[n_clave - 1] == "*") {
+        comodin = verdadero
+        n_clave = n_clave - 1
+    }
+
+    si (comodin) {
+        si (n_ruta < n_clave) {
+            retornar nulo
+        }
+    } sino {
+        si (n_ruta != n_clave) {
+            retornar nulo
         }
     }
 
-    retornar nulo
+    variable params = {}
+    variable puntaje = 0
+    variable idx_param = 0
+    variable j = 0
+    mientras (j < n_clave) {
+        variable pr = partes_ruta[j]
+        variable pc = partes_clave[j]
+        si (pc == "(:param)") {
+            si (idx_param < longitud(nombres_params)) {
+                params[nombres_params[idx_param]] = pr
+            }
+            idx_param = idx_param + 1
+        } sino {
+            si (pr != pc) {
+                retornar nulo
+            }
+            # Peso por posición: un literal temprano hace al patrón más
+            # específico (`/a/b/:y` le gana a `/a/:x/c` en `/a/b/c`).
+            puntaje = puntaje + (n_clave - j)
+        }
+        j = j + 1
+    }
+
+    si (comodin) {
+        variable resto = []
+        variable k = n_clave
+        mientras (k < n_ruta) {
+            resto = resto + [partes_ruta[k]]
+            k = k + 1
+        }
+        params["*"] = unir_elementos(resto, "/")
+    }
+
+    retornar {"params": params, "puntaje": puntaje}
+}
+
+# Métodos que tienen alguna ruta para esta ruta concreta (para el 405 + Allow).
+funcion _metodos_que_manejan(servidor, ruta: Texto) {
+    variable metodos = []
+    variable lista = claves(servidor._rutas)
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        variable candidato = lista[i]
+        si (candidato != "HEAD" && _resolver_ruta(servidor, candidato, ruta) != nulo) {
+            metodos = metodos + [candidato]
+        }
+        i = i + 1
+    }
+    si (longitud(metodos) > 0) {
+        metodos = metodos + ["HEAD"]
+    }
+    retornar metodos
 }
 
 # ─── Manejo de solicitudes ──────────────────────────────────────────
 
-funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
+# Cierra el ciclo de una respuesta: `HEAD`, keep-alive, envío, métrica y log.
+# Todo camino que responda pasa por acá para que no se escape una métrica.
+funcion _responder(servidor, socket, respuesta, metodo: Texto, datos_raw: Texto, cabeceras, ruta: Texto, t0: Entero) -> Logico {
+    si (servidor._seguridad) {
+        _cabeceras_seguridad(respuesta, servidor._hsts)
+    }
+    _aplicar_head(metodo, respuesta)
+    variable mantener = _fijar_conexion(respuesta, datos_raw, cabeceras)
+    _enviar_respuesta(socket, respuesta)
+
+    variable codigo = a_texto(respuesta.codigo)
+    variable previo = servidor._metricas[codigo]
+    si (previo == nulo) {
+        previo = 0
+    }
+    servidor._metricas[codigo] = previo + 1
+
+    variable total = compartido.sumar(servidor._requests, 1)
+    variable ms = _sistema_tiempo_ms() - t0
+    log.informacion(metodo + " " + ruta + " -> " + codigo + " (" + a_texto(ms) + " ms, #" + a_texto(total) + ")")
+    retornar mantener
+}
+
+# Devuelve verdadero si la conexión debe seguir abierta (keep-alive).
+funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) -> Logico {
+    variable t0 = _sistema_tiempo_ms()
     variable parseado = _http_parsear_solicitud(datos_raw)
     si (parseado == nulo) {
-        retornar
+        retornar falso
     }
 
     variable partes = _texto_a_mapa(parseado)
@@ -392,6 +845,21 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
         parametros = _query_parsear(query)
     }
 
+    # Formularios HTML clásicos: los campos viajan en el cuerpo, no en la URL.
+    # Sin esto cualquier `<form method="post">` llega vacío.
+    si (metodo == "POST" || metodo == "PUT" || metodo == "PATCH") {
+        variable tipo = cabeceras["content-type"]
+        si (tipo != nulo && contiene(a_minusculas(tipo), "application/x-www-form-urlencoded") && longitud(cuerpo) > 0) {
+            variable del_cuerpo = _query_parsear(cuerpo)
+            variable nombres = claves(del_cuerpo)
+            variable k = 0
+            mientras (k < longitud(nombres)) {
+                parametros[nombres[k]] = del_cuerpo[nombres[k]]
+                k = k + 1
+            }
+        }
+    }
+
     variable solicitud = nuevo SolicitudHTTP()
     solicitud.metodo = metodo
     solicitud.ruta = ruta
@@ -399,8 +867,10 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
     solicitud.cuerpo = cuerpo
     solicitud.parametros = parametros
 
-    variable ip_local = _socket_direccion_local(socket)
-    solicitud.ip = ip_local
+    # `ip` es el cliente (para logs y rate limit); `ip_local` es la dirección
+    # del servidor en esa conexión.
+    solicitud.ip = _socket_direccion_remota(socket)
+    solicitud.ip_local = _socket_direccion_local(socket)
 
     si (cabeceras["cookie"] != nulo) {
         solicitud.cookies = _parsear_cookies(cabeceras["cookie"])
@@ -412,35 +882,36 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
         res_cors.cabeceras["Access-Control-Allow-Origin"] = "*"
         res_cors.cabeceras["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
         res_cors.cabeceras["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        _enviar_respuesta(socket, res_cors)
-        retornar
+        retornar _responder(servidor, socket, res_cors, metodo, datos_raw, cabeceras, ruta, t0)
     }
 
     variable ruta_info = _resolver_ruta(servidor, metodo, ruta)
+    si (ruta_info == nulo && metodo == "HEAD") {
+        ruta_info = _resolver_ruta(servidor, "GET", ruta)
+    }
     variable manejador = nulo
 
     si (ruta_info == nulo) {
-        variable claves_static = claves(servidor._static_rutas)
-        variable i = 0
-        mientras (i < longitud(claves_static)) {
-            variable prefijo = claves_static[i]
-            si (empieza_con(ruta, prefijo)) {
-                variable dir = servidor._static_rutas[prefijo]
-                variable ruta_archivo = dir + "/" + subcadena(ruta, longitud(prefijo), longitud(ruta) - longitud(prefijo))
-                variable respuesta = nuevo RespuestaHTTP()
-                respuesta = error_respuesta(respuesta, 404)
-                _enviar_respuesta(socket, respuesta)
-                retornar
-            }
-            i = i + 1
+        si (_prefijo_estatico(servidor, ruta) != "") {
+            variable respuesta_est = _respuesta_estatica(servidor, ruta, cabeceras, metodo)
+            retornar _responder(servidor, socket, respuesta_est, metodo, datos_raw, cabeceras, ruta, t0)
+        }
+
+        variable permitidos = _metodos_que_manejan(servidor, ruta)
+        si (longitud(permitidos) > 0) {
+            variable respuesta_405 = nuevo RespuestaHTTP()
+            respuesta_405.codigo = 405
+            respuesta_405.cuerpo = "Método no permitido: " + metodo
+            respuesta_405.tipo_contenido = "text/plain; charset=utf-8"
+            respuesta_405.cabeceras["Allow"] = unir_elementos(permitidos, ", ")
+            retornar _responder(servidor, socket, respuesta_405, metodo, datos_raw, cabeceras, ruta, t0)
         }
 
         variable respuesta_404 = nuevo RespuestaHTTP()
         respuesta_404.codigo = 404
         respuesta_404.cuerpo = "Ruta no encontrada: " + metodo + " " + ruta
         respuesta_404.tipo_contenido = "text/plain; charset=utf-8"
-        _enviar_respuesta(socket, respuesta_404)
-        retornar
+        retornar _responder(servidor, socket, respuesta_404, metodo, datos_raw, cabeceras, ruta, t0)
     }
 
     solicitud.params_ruta = ruta_info["params"]
@@ -474,9 +945,8 @@ funcion _manejar_solicitud(servidor, socket, datos_raw: Texto) {
         respuesta.cabeceras["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     }
 
-    _enviar_respuesta(socket, respuesta)
-    variable total = compartido.sumar(servidor._requests, 1)
-    log.informacion(metodo + " " + ruta + " -> " + a_texto(respuesta.codigo) + " (#" + a_texto(total) + ")")
+    variable mantener_final = _responder(servidor, socket, respuesta, metodo, datos_raw, cabeceras, ruta, t0)
+    retornar mantener_final
 }
 
 # ─── Envio de respuestas ────────────────────────────────────────────
@@ -489,7 +959,9 @@ funcion _enviar_respuesta(socket, respuesta) {
     }
 
     cabeceras_mapa["Server"] = "Forja-Web/1.0"
-    cabeceras_mapa["Connection"] = "close"
+    si (cabeceras_mapa["Connection"] == nulo) {
+        cabeceras_mapa["Connection"] = "close"
+    }
 
     variable fecha = _http_fecha_texto()
     si (fecha != -1) {
@@ -504,10 +976,23 @@ funcion _enviar_respuesta(socket, respuesta) {
     }
 }
 
+# Respuesta mínima para requests que no se pueden ni parsear (413/431).
+# Siempre cierra la conexión: no hay request válido al que responder.
+funcion _responder_error_de_entrada(socket, codigo: Entero, mensaje: Texto) {
+    variable respuesta = nuevo RespuestaHTTP()
+    respuesta.codigo = codigo
+    respuesta.tipo_contenido = "text/plain; charset=utf-8"
+    respuesta.cuerpo = mensaje
+    respuesta.cabeceras["Content-Type"] = respuesta.tipo_contenido
+    respuesta.cabeceras["Connection"] = "close"
+    _enviar_respuesta(socket, respuesta)
+}
+
 # ─── Inicio del servidor ────────────────────────────────────────────
 
 funcion iniciar(servidor) {
     servidor._corriendo = verdadero
+    servidor._inicio_ms = _sistema_tiempo_ms()
     # Se registra por stderr (`_log_escribir`), no con `imprimir`: la salida de
     # `imprimir` se acumula y recién se vuelca al terminar, y un servidor no
     # termina nunca (los logs no se verían).
@@ -530,36 +1015,52 @@ funcion iniciar(servidor) {
             continuar
         }
 
-        # Timeout de 10 s para no quedar colgado con un cliente lento.
+        # Timeout de 10 s de inactividad: con keep-alive también sirve para
+        # cerrar conexiones ociosas (el socket devuelve "" y se sale del bucle).
         _socket_fijar_timeout(cliente, 10000)
-        variable datos = _leer_solicitud(cliente, servidor._max_cuerpo)
-        si (datos == nulo) {
-            _socket_cerrar(cliente)
-            continuar
-        }
-        si (datos == "") {
-            _socket_cerrar(cliente)
-            continuar
-        }
 
-        # ─── Detección de protocolo ─────────────────────────────────────
-        # HTTP/2 h2c: el preface "PRI * HTTP/2.0" identifica una conexion H2
-        si (empieza_con(datos, "PRI * HTTP/2.0")) {
-            imprimir("[servidor_web] Conexion HTTP/2 (h2c) detectada en puerto " + a_texto(servidor._puerto))
-            imprimir("[servidor_web] Usa 'importar \"std/servidor_h2\"' y ServidorH2 para manejar HTTP/2")
-            _socket_cerrar(cliente)
-            continuar
-        }
+        # ─── Bucle keep-alive ────────────────────────────────────────────
+        variable resto = ""
+        variable seguir = verdadero
+        variable atendidas = 0
+        mientras (seguir && atendidas < MAX_PETICIONES_CONEXION && servidor._corriendo) {
+            variable lectura = _leer_solicitud(cliente, servidor._max_cuerpo, resto)
+            si (lectura == nulo) {
+                romper
+            }
+            variable error_entrada = lectura["error"]
+            si (error_entrada == 413) {
+                _responder_error_de_entrada(cliente, 413, "El cuerpo supera el límite permitido")
+                romper
+            }
+            si (error_entrada == 431) {
+                _responder_error_de_entrada(cliente, 431, "Cabeceras demasiado grandes")
+                romper
+            }
+            variable datos = lectura["datos"]
+            resto = lectura["resto"]
+            si (datos == "") {
+                romper
+            }
 
-        # HTTP/2 via Upgrade: h2c
-        si (contiene(datos, "Upgrade: h2c") || contiene(datos, "HTTP2-Settings")) {
-            imprimir("[servidor_web] Solicitud HTTP/1.1 con upgrade h2c detectada")
-            imprimir("[servidor_web] Usa 'importar \"std/servidor_h2\"' y ServidorH2 para manejar HTTP/2")
-            _socket_cerrar(cliente)
-            continuar
-        }
+            # ─── Detección de protocolo ─────────────────────────────────
+            # HTTP/2 h2c: el preface "PRI * HTTP/2.0" identifica una conexion H2
+            si (empieza_con(datos, "PRI * HTTP/2.0")) {
+                imprimir("[servidor_web] Conexion HTTP/2 (h2c) detectada en puerto " + a_texto(servidor._puerto))
+                imprimir("[servidor_web] Usa 'importar \"std/servidor_h2\"' y ServidorH2 para manejar HTTP/2")
+                romper
+            }
 
-        _manejar_solicitud(servidor, cliente, datos)
+            # HTTP/2 via Upgrade: h2c
+            si (contiene(datos, "Upgrade: h2c") || contiene(datos, "HTTP2-Settings")) {
+                imprimir("[servidor_web] Solicitud HTTP/1.1 con upgrade h2c detectada")
+                imprimir("[servidor_web] Usa 'importar \"std/servidor_h2\"' y ServidorH2 para manejar HTTP/2")
+                romper
+            }
+
+            seguir = _manejar_solicitud(servidor, cliente, datos)
+            atendidas = atendidas + 1
+        }
         _socket_cerrar(cliente)
     }
 

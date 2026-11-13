@@ -1,0 +1,76 @@
+# Tests de std/redis: código RESP (ida y vuelta) sin necesitar un servidor.
+#
+# El socket no se prueba acá: los tests de CI no levantan Redis. Lo que se
+# verifica es el framing, que es donde se rompen los clientes.
+importar "std/redis"
+importar "std/tests/arnes"
+
+# ─── Codificación ──────────────────────────────────────────────────
+comprobar_texto("codificar: PING", redis._resp_codificar(["PING"]), "*1\r\n$4\r\nPING\r\n")
+comprobar_texto("codificar: SET", redis._resp_codificar(["SET", "k", "v"]),
+    "*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$1\r\nv\r\n")
+comprobar_texto("codificar: largo en bytes", redis._resp_codificar(["SET", "k", "á"]),
+    "*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$2\r\ná\r\n")
+
+# ─── Respuestas simples ────────────────────────────────────────────
+variable r_ok = redis._resp_parsear("+OK\r\n", 0)
+comprobar_texto("parsear: simple string", r_ok["valor"], "OK")
+comprobar_igual("parsear: fin", r_ok["fin"], 5)
+
+variable r_entero = redis._resp_parsear(":42\r\n", 0)
+comprobar_igual("parsear: entero", r_entero["valor"], 42)
+
+variable r_error = redis._resp_parsear("-ERR clave inválida\r\n", 0)
+comprobar_texto("parsear: tipo error", r_error["tipo"], "error")
+comprobar("parsear: mensaje de error", contiene(r_error["valor"], "ERR"))
+
+# ─── Bulk strings ──────────────────────────────────────────────────
+variable r_bulk = redis._resp_parsear("$5\r\nvalor\r\n", 0)
+comprobar_texto("parsear: bulk", r_bulk["valor"], "valor")
+comprobar_igual("parsear: bulk fin", r_bulk["fin"], 11)
+
+variable r_bulk_utf8 = redis._resp_parsear("$4\r\nábc\r\n", 0)
+comprobar_texto("parsear: bulk UTF-8 (bytes vs caracteres)", r_bulk_utf8["valor"], "ábc")
+comprobar_igual("parsear: bulk UTF-8 fin", r_bulk_utf8["fin"], 9)
+
+variable r_nulo = redis._resp_parsear("$-1\r\n", 0)
+comprobar_texto("parsear: bulk nulo", r_nulo["tipo"], "nulo")
+
+variable r_vacio = redis._resp_parsear("$0\r\n\r\n", 0)
+comprobar_texto("parsear: bulk vacío", r_vacio["valor"], "")
+
+# ─── Incompleto = nulo (hay que pedir más bytes) ────────────────────
+comprobar("parsear: falta el bulk", redis._resp_parsear("$5\r\nval", 0) == nulo)
+comprobar("parsear: falta el \\r\\n", redis._resp_parsear("$5\r\nvalor", 0) == nulo)
+comprobar("parsear: falta el largo", redis._resp_parsear("$", 0) == nulo)
+comprobar("parsear: buffer vacío", redis._resp_parsear("", 0) == nulo)
+
+# ─── Arrays ────────────────────────────────────────────────────────
+variable r_arr = redis._resp_parsear("*2\r\n$1\r\na\r\n$1\r\nb\r\n", 0)
+comprobar_igual("parsear: array largo", longitud(r_arr["valor"]), 2)
+comprobar_texto("parsear: array[0]", r_arr["valor"][0], "a")
+comprobar_texto("parsear: array[1]", r_arr["valor"][1], "b")
+
+variable r_arr_nulo = redis._resp_parsear("*-1\r\n", 0)
+comprobar_texto("parsear: array nulo", r_arr_nulo["tipo"], "nulo")
+
+variable r_arr_incompleto = redis._resp_parsear("*2\r\n$1\r\na\r\n", 0)
+comprobar("parsear: array incompleto", r_arr_incompleto == nulo)
+
+# HGETALL: array plano campo/valor.
+variable r_hash = redis._resp_parsear("*4\r\n$2\r\nid\r\n$1\r\n7\r\n$4\r\nname\r\n$3\r\nana\r\n", 0)
+comprobar_igual("parsear: HGETALL plano", longitud(r_hash["valor"]), 4)
+
+# ─── Varias respuestas en el mismo buffer (pipelining) ──────────────
+variable dos = "+OK\r\n:1\r\n"
+variable primera = redis._resp_parsear(dos, 0)
+variable segunda = redis._resp_parsear(dos, primera["fin"])
+comprobar_texto("pipelining: primera", primera["valor"], "OK")
+comprobar_igual("pipelining: segunda", segunda["valor"], 1)
+
+# ─── Utilidades internas ───────────────────────────────────────────
+comprobar_igual("caracteres de bytes: ascii", redis._caracteres_de_bytes("abc", 0, 2), 2)
+comprobar_igual("caracteres de bytes: utf-8", redis._caracteres_de_bytes("ábc", 0, 4), 3)
+comprobar_igual("caracteres de bytes: resto corto", redis._caracteres_de_bytes("ab", 0, 9), 2)
+
+resumen()

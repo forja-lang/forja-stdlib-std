@@ -1,0 +1,88 @@
+# Tests de std/vista: HTML seguro, variantes texto/html y formularios.
+importar "std/vista"
+importar "std/tests/arnes"
+
+# ─── Piezas básicas ────────────────────────────────────────────────
+comprobar_texto("escapar delega en plantillas", vista.escapar("<b>"), "&lt;b&gt;")
+comprobar_texto("texto_nodo escapa", vista.texto_nodo("a & b"), "a &amp; b")
+comprobar_texto("texto_nodo con número", vista.texto_nodo(7), "7")
+comprobar_texto("crudo no escapa", vista.crudo("<b>x</b>"), "<b>x</b>")
+
+comprobar_texto("atributo", vista.atributo("class", "x"), " class=\"x\"")
+comprobar_texto("atributo escapa comillas", vista.atributo("title", "a\"b"), " title=\"a&quot;b\"")
+comprobar_texto("atributo nulo se omite", vista.atributo("x", nulo), "")
+variable mapa_attrs = vista.atributos({"id": "a", "class": "b"})
+comprobar("atributos: incluye id", contiene(mapa_attrs, " id=\"a\""))
+comprobar("atributos: incluye class", contiene(mapa_attrs, " class=\"b\""))
+
+# ─── Elementos ─────────────────────────────────────────────────────
+comprobar_texto("nodo con hijos HTML", vista.nodo("div", {"class": "c"}, "<b>x</b>"),
+    "<div class=\"c\"><b>x</b></div>")
+comprobar_texto("nodo vacío sin cierre", vista.nodo("input", {"name": "n"}, ""),
+    "<input name=\"n\">")
+comprobar_texto("nodo_texto escapa el contenido", vista.nodo_texto("p", {}, "<script>"),
+    "<p>&lt;script&gt;</p>")
+
+variable cont = vista.contenedor([vista.encabezado("T", 1), vista.parrafo("hola")])
+comprobar("contenedor: envuelve en div.vista", empieza_con(cont, "<div class=\"vista\">"))
+comprobar("contenedor: suma hijos", contiene(cont, "<h1>T</h1><p>hola</p>"))
+comprobar("contenedor: cierra", termina_con(cont, "</div>"))
+
+# ─── Títulos y enlaces ─────────────────────────────────────────────
+comprobar_texto("titulo nivel 2", vista.encabezado("Hola", 2), "<h2>Hola</h2>")
+comprobar_texto("titulo nivel 0 se limita a 1", vista.encabezado("Hola", 0), "<h1>Hola</h1>")
+comprobar_texto("titulo nivel 9 se limita a 6", vista.encabezado("Hola", 9), "<h6>Hola</h6>")
+comprobar_texto("titulo escapa", vista.encabezado("<x>", 1), "<h1>&lt;x&gt;</h1>")
+comprobar_texto("enlace", vista.enlace("/a?b=1&c=2", "ir"),
+    "<a href=\"/a?b=1&amp;c=2\">ir</a>")
+
+# ─── Listas ────────────────────────────────────────────────────────
+comprobar_texto("lista_textos escapa", vista.lista_textos(["<a>", "b"]),
+    "<ul><li>&lt;a&gt;</li><li>b</li></ul>")
+comprobar_texto("lista_html no escapa", vista.lista_html(["<b>a</b>"]),
+    "<ul><li><b>a</b></li></ul>")
+comprobar_texto("lista con clases",
+    vista.lista_html_con_clases(["<b>a</b>", "<b>b</b>"], ["hecha", ""]),
+    "<ul><li class=\"hecha\"><b>a</b></li><li class=\"\"><b>b</b></li></ul>")
+comprobar_texto("lista vacía", vista.lista_textos([]), "<ul></ul>")
+
+# ─── Tablas ────────────────────────────────────────────────────────
+comprobar_texto("tabla_textos",
+    vista.tabla_textos(["a", "b"], [["1", "2"]]),
+    "<table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>")
+comprobar("tabla_textos escapa celdas",
+    contiene(vista.tabla_textos(["x"], [["<script>"]]), "&lt;script&gt;"))
+comprobar("tabla_html respeta el HTML de la celda",
+    contiene(vista.tabla_html(["<th>a</th>"], [["<td><b>1</b></td>"]]), "<td><b>1</b></td>"))
+
+# ─── Formularios ───────────────────────────────────────────────────
+variable c = vista.campo("titulo", "pan", "text", "comprar", verdadero)
+comprobar("campo: label con for", contiene(c, "<label for=\"titulo\">titulo</label>"))
+comprobar("campo: id y name", contiene(c, " id=\"titulo\"") && contiene(c, " name=\"titulo\""))
+comprobar("campo: valor escapado", contiene(c, " value=\"pan\""))
+comprobar("campo: required", contiene(c, " required"))
+comprobar("campo sin required", !contiene(vista.campo("x", "", "text", "", falso), " required"))
+comprobar("campo: escapa el valor", contiene(vista.campo("x", "\"a\"", "text", "", falso), "&quot;a&quot;"))
+
+comprobar_texto("csrf", vista.csrf("tok"), "<input type=\"hidden\" name=\"csrf\" value=\"tok\">")
+comprobar_texto("boton por defecto es submit", vista.boton("Enviar", ""), "<button type=\"submit\">Enviar</button>")
+comprobar_texto("boton con tipo", vista.boton("Salir", "button"), "<button type=\"button\">Salir</button>")
+
+variable form = vista.formulario("/tareas", "post", [vista.csrf("t"), vista.boton("Ir", "")])
+comprobar("formulario: method y action", contiene(form, "method=\"post\" action=\"/tareas\""))
+comprobar("formulario: contenido unido", contiene(form, "value=\"t\"><button"))
+
+# ─── Mensajes y página ─────────────────────────────────────────────
+variable errs = vista.errores(["uno", "", nulo])
+comprobar("errores: ignora vacíos", contiene(errs, "<p class=\"error\">uno</p>") && !contiene(errs, "<p class=\"error\"></p>"))
+comprobar("errores: escapa", contiene(vista.errores(["<x>"]), "&lt;x&gt;"))
+comprobar("aviso", contiene(vista.aviso("ojo"), "<p class=\"aviso\">ojo</p>"))
+
+variable pag = vista.pagina("T & T", "<h1>x</h1>", "/publico/estilo.css")
+comprobar("página: doctype y lang", empieza_con(pag, "<!doctype html><html lang=\"es\">"))
+comprobar("página: título escapado", contiene(pag, "<title>T &amp; T</title>"))
+comprobar("página: hoja de estilos", contiene(pag, "<link rel=\"stylesheet\" href=\"/publico/estilo.css\">"))
+comprobar("página: contenido", contiene(pag, "<body><h1>x</h1></body>"))
+comprobar("página sin CSS", !contiene(vista.pagina("t", "", ""), "stylesheet"))
+
+resumen()

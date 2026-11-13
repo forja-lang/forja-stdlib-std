@@ -68,4 +68,161 @@ variable cookies = servidor_web._parsear_cookies("a=1; b=dos")
 comprobar_texto("cookie a", cookies["a"], "1")
 comprobar_texto("cookie b", cookies["b"], "dos")
 
+# ─── Keep-alive ──────────────────
+comprobar("HTTP/1.1 sin Connection reutiliza", servidor_web._mantener_conexion(
+    "GET / HTTP/1.1\r\nHost: x\r\n", {"host": "x"}))
+comprobar("HTTP/1.1 con Connection: close cierra", servidor_web._mantener_conexion(
+    "GET / HTTP/1.1\r\nConnection: close\r\n", {"connection": "close"}) == falso)
+comprobar("HTTP/1.0 sin Connection cierra", servidor_web._mantener_conexion(
+    "GET / HTTP/1.0\r\nHost: x\r\n", {"host": "x"}) == falso)
+comprobar("HTTP/1.0 con keep-alive reutiliza", servidor_web._mantener_conexion(
+    "GET / HTTP/1.0\r\nConnection: keep-alive\r\n", {"connection": "Keep-Alive"}))
+
+variable resp_ka = nuevo RespuestaHTTP()
+comprobar("fijar_conexion: reutiliza", servidor_web._fijar_conexion(resp_ka, "GET / HTTP/1.1\r\n", {}))
+comprobar_texto("fijar_conexion: cabecera", resp_ka.cabeceras["Connection"], "keep-alive")
+variable resp_cierre = nuevo RespuestaHTTP()
+comprobar("fijar_conexion: cierra", servidor_web._fijar_conexion(resp_cierre, "GET / HTTP/1.0\r\n", {}) == falso)
+comprobar_texto("fijar_conexion: cabecera de cierre", resp_cierre.cabeceras["Connection"], "close")
+
+# ─── Grupos, prioridad, comodines, 405 y URL por nombre ────────────
+variable srv2 = nuevo ServidorWeb(0)
+variable g_api = servidor_web.grupo(srv2, "/api")
+servidor_web.registrar_obtener(g_api, "/tareas", func(p, r) { retornar servidor_web.html(r, "lista") })
+servidor_web.registrar_obtener(g_api, "/tareas/:id", func(p, r) { retornar servidor_web.texto_plano(r, p.params_ruta["id"]) })
+comprobar("grupo: prefijo aplicado", servidor_web._resolver_ruta(srv2, "GET", "/api/tareas") != nulo)
+variable g_param = servidor_web._resolver_ruta(srv2, "GET", "/api/tareas/9")
+comprobar_texto("grupo: parámetro bajo prefijo", g_param["params"]["id"], "9")
+comprobar("grupo: sin prefijo no existe", servidor_web._resolver_ruta(srv2, "GET", "/tareas") == nulo)
+
+# Prioridad: más segmentos literales gana, sin importar el orden de registro.
+servidor_web.registrar_obtener(srv2, "/a/:x/c", func(p, r) { retornar servidor_web.texto_plano(r, "param") })
+servidor_web.registrar_obtener(srv2, "/a/b/:y", func(p, r) { retornar servidor_web.texto_plano(r, "literal") })
+variable prioridad = servidor_web._resolver_ruta(srv2, "GET", "/a/b/c")
+comprobar("prioridad: gana el patrón más literal", prioridad != nulo && prioridad["params"]["y"] == "c")
+
+# Comodín final: captura el resto de la ruta.
+servidor_web.registrar_obtener(srv2, "/estatico/*", func(p, r) { retornar servidor_web.texto_plano(r, p.params_ruta["*"]) })
+variable comodin = servidor_web._resolver_ruta(srv2, "GET", "/estatico/a/b.css")
+comprobar_texto("comodín: captura el resto", comodin["params"]["*"], "a/b.css")
+comprobar("comodín: prefijo solo también matchea", servidor_web._resolver_ruta(srv2, "GET", "/estatico") != nulo)
+
+# 405: la ruta existe con otro método → se informa cuáles.
+servidor_web.enviar(srv2, "/solo-post-2", func(p, r) { retornar servidor_web.texto_plano(r, "ok") })
+variable permitidos = servidor_web._metodos_que_manejan(srv2, "/solo-post-2")
+comprobar_igual("405: un método permitido", longitud(permitidos), 2)
+comprobar("405: incluye POST", contiene(unir_elementos(permitidos, ","), "POST"))
+comprobar("405: incluye HEAD", contiene(unir_elementos(permitidos, ","), "HEAD"))
+comprobar_igual("405: ruta inexistente no da métodos", longitud(servidor_web._metodos_que_manejan(srv2, "/nada-de-nada")), 0)
+
+# URL por nombre.
+servidor_web.nombrar_ruta(srv2, "tarea", "/tareas/:id")
+comprobar_texto("url_de: sustituye parámetros", servidor_web.url_de(srv2, "tarea", {"id": 7}), "/tareas/7")
+comprobar_texto("url_de: sin params deja vacío", servidor_web.url_de(srv2, "tarea", nulo), "/tareas/")
+comprobar_texto("url_de: nombre inexistente", servidor_web.url_de(srv2, "no-existe", {}), "")
+variable g_api2 = servidor_web.grupo(srv2, "/api")
+servidor_web.registrar_obtener(g_api2, "/otra/:id", func(p, r) { retornar servidor_web.texto_plano(r, "x") })
+servidor_web.nombrar_ruta(g_api2, "otra", "/otra/:id")
+comprobar_texto("url_de: nombre bajo grupo incluye prefijo", servidor_web.url_de(srv2, "otra", {"id": 3}), "/api/otra/3")
+
+# ─── Archivos estáticos ───
+comprobar_texto("mime: html", servidor_web._tipo_mime("index.html"), "text/html; charset=utf-8")
+comprobar_texto("mime: css", servidor_web._tipo_mime("a.CSS"), "text/css; charset=utf-8")
+comprobar_texto("mime: js", servidor_web._tipo_mime("app.js"), "text/javascript; charset=utf-8")
+comprobar_texto("mime: desconocido", servidor_web._tipo_mime("dato.bin"), "application/octet-stream")
+comprobar("binaria: wasm", servidor_web._es_extension_binaria("app.wasm"))
+comprobar("binaria: html no", servidor_web._es_extension_binaria("index.html") == falso)
+
+comprobar_texto("relativa: normal", servidor_web._relativa_segura("/publico/a.css", "/publico"), "a.css")
+comprobar_texto("relativa: recorta barras", servidor_web._relativa_segura("/publico/sub/a.css", "/publico"), "sub/a.css")
+comprobar_texto("relativa: raíz vacía", servidor_web._relativa_segura("/publico/", "/publico"), "")
+comprobar("relativa: rechaza ..", servidor_web._relativa_segura("/publico/../../etc/passwd", "/publico") == nulo)
+comprobar("relativa: rechaza backslash", servidor_web._relativa_segura("/publico/..\\win.ini", "/publico") == nulo)
+comprobar("relativa: rechaza unidad", servidor_web._relativa_segura("/publico/C:/win.ini", "/publico") == nulo)
+
+# Servir de verdad desde un directorio temporal.
+variable dir_estatico = ".forja-estaticos-test"
+_directorio_crear(dir_estatico)
+variable f = _archivo_escribir(dir_estatico + "/hola.txt", "hola")
+variable srv_est = nuevo ServidorWeb(0)
+servidor_web.servir_estaticos(srv_est, "/publico", dir_estatico)
+comprobar_texto("estático: prefijo más largo gana", servidor_web._prefijo_estatico(srv_est, "/publico/hola.txt"), "/publico")
+comprobar_texto("estático: sin prefijo", servidor_web._prefijo_estatico(srv_est, "/otra"), "")
+
+variable resp_est = servidor_web._respuesta_estatica(srv_est, "/publico/hola.txt", {}, "GET")
+comprobar_igual("estático: 200", resp_est.codigo, 200)
+comprobar_texto("estático: cuerpo", resp_est.cuerpo, "hola")
+comprobar_texto("estático: mime", resp_est.cabeceras["Content-Type"], "text/plain; charset=utf-8")
+comprobar("estático: ETag presente", resp_est.cabeceras["ETag"] != nulo)
+
+variable resp_304 = servidor_web._respuesta_estatica(srv_est, "/publico/hola.txt", {"if-none-match": resp_est.cabeceras["ETag"]}, "GET")
+comprobar_igual("estático: ETag repetido da 304", resp_304.codigo, 304)
+
+variable resp_head = servidor_web._respuesta_estatica(srv_est, "/publico/hola.txt", {}, "HEAD")
+comprobar_igual("estático: HEAD sin cuerpo", longitud(resp_head.cuerpo), 0)
+comprobar_texto("estático: HEAD conserva Content-Length", resp_head.cabeceras["Content-Length"], "4")
+
+variable resp_403 = servidor_web._respuesta_estatica(srv_est, "/publico/../secreto.txt", {}, "GET")
+comprobar_igual("estático: traversal da 403", resp_403.codigo, 403)
+variable resp_no = servidor_web._respuesta_estatica(srv_est, "/publico/no-existe.txt", {}, "GET")
+comprobar_igual("estático: inexistente da 404", resp_no.codigo, 404)
+variable resp_405e = servidor_web._respuesta_estatica(srv_est, "/publico/hola.txt", {}, "POST")
+comprobar_igual("estático: otro método da 405", resp_405e.codigo, 405)
+comprobar_texto("estático: 405 anuncia Allow", resp_405e.cabeceras["Allow"], "GET, HEAD")
+
+# HEAD dinámico: misma ruta que GET, sin cuerpo y con largo de bytes.
+variable resp_din = nuevo RespuestaHTTP()
+resp_din = servidor_web.texto_plano(resp_din, "áes")
+servidor_web._aplicar_head("HEAD", resp_din)
+comprobar_igual("head dinámico: sin cuerpo", longitud(resp_din.cuerpo), 0)
+comprobar_texto("head dinámico: largo en bytes", resp_din.cabeceras["Content-Length"], "4")
+
+# Regresión: el HEAD de un estático ya trae el Content-Length del archivo y
+# `_aplicar_head` no debe pisarlo con 0.
+variable resp_head2 = nuevo RespuestaHTTP()
+resp_head2.cabeceras["Content-Length"] = "20"
+servidor_web._aplicar_head("HEAD", resp_head2)
+comprobar_texto("head: respeta Content-Length previo", resp_head2.cabeceras["Content-Length"], "20")
+
+# Limpieza: los tests no dejan archivos en el repo.
+_archivo_eliminar(dir_estatico + "/hola.txt")
+_directorio_eliminar(dir_estatico)
+
+# ─── Salud y métricas ──────
+variable srv_salud = nuevo ServidorWeb(0)
+servidor_web.habilitar_salud(srv_salud)
+variable sal_ruta = servidor_web._resolver_ruta(srv_salud, "GET", "/salud")
+comprobar("salud: ruta registrada", sal_ruta != nulo)
+# `mapa["k"](args)` se parsea mal (ver N22): hace falta pasar por variable.
+variable manejador_salud = sal_ruta["manejador"]
+variable resp_salud = manejador_salud(nuevo SolicitudHTTP(), nuevo RespuestaHTTP())
+comprobar("salud: JSON con estado", contiene(resp_salud.cuerpo, "\"estado\":\"ok\""))
+comprobar("salud: incluye requests", contiene(resp_salud.cuerpo, "\"requests\":"))
+comprobar("salud: incluye uptime", contiene(resp_salud.cuerpo, "\"uptime_ms\":"))
+comprobar_texto("salud: content-type", resp_salud.cabeceras["Content-Type"], "application/json; charset=utf-8")
+
+variable met_ruta = servidor_web._resolver_ruta(srv_salud, "GET", "/metricas")
+variable manejador_met = met_ruta["manejador"]
+variable resp_met = manejador_met(nuevo SolicitudHTTP(), nuevo RespuestaHTTP())
+comprobar("metricas: JSON", empieza_con(resp_met.cuerpo, "{"))
+
+# ─── Cabeceras de seguridad ──
+variable res_seg = nuevo RespuestaHTTP()
+servidor_web._cabeceras_seguridad(res_seg, falso)
+comprobar_texto("seguridad: nosniff", res_seg.cabeceras["X-Content-Type-Options"], "nosniff")
+comprobar_texto("seguridad: frame", res_seg.cabeceras["X-Frame-Options"], "DENY")
+comprobar_texto("seguridad: referrer", res_seg.cabeceras["Referrer-Policy"], "strict-origin-when-cross-origin")
+comprobar_texto("seguridad: CSP", res_seg.cabeceras["Content-Security-Policy"], "default-src 'self'")
+comprobar("seguridad: sin HSTS en HTTP", res_seg.cabeceras["Strict-Transport-Security"] == nulo)
+
+variable res_hsts = nuevo RespuestaHTTP()
+servidor_web._cabeceras_seguridad(res_hsts, verdadero)
+comprobar("seguridad: HSTS con HTTPS", res_hsts.cabeceras["Strict-Transport-Security"] != nulo)
+
+# No pisa lo que fijó el handler.
+variable res_propia = nuevo RespuestaHTTP()
+res_propia.cabeceras["Content-Security-Policy"] = "default-src 'none'"
+servidor_web._cabeceras_seguridad(res_propia, falso)
+comprobar_texto("seguridad: respeta la CSP del handler", res_propia.cabeceras["Content-Security-Policy"], "default-src 'none'")
+
 resumen()

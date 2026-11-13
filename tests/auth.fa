@@ -1,0 +1,111 @@
+# Tests de std/auth: contraseñas, registro, login, rate limit y logout.
+#
+# Usa un store en memoria (mapa) con la misma forma que un `buscar_usuario`
+# real sobre SQLite/Redis: `{"id": ..., "hash": ...}`.
+importar "std/auth"
+importar "std/sesion"
+importar "std/servidor_web"
+importar "std/tests/arnes"
+
+variable usuarios = {}
+
+# Los helpers NO pueden llamarse como una función de la stdlib (`crear` es
+# `sesion.crear` y gana la global, N4): de ahí los sufijos `_test`.
+funcion buscar_test(identificador) {
+    retornar usuarios[identificador]
+}
+
+funcion crear_test(identificador, hash) {
+    si (usuarios[identificador] != nulo) {
+        retornar nulo
+    }
+    variable id = longitud(claves(usuarios)) + 1
+    usuarios[identificador] = {"id": id, "hash": hash}
+    retornar id
+}
+
+variable almacen_sesiones = sesion.almacen("secreto-de-pruebas-1234567890", 3600, falso)
+variable guardia = auth.autenticador(almacen_sesiones, buscar_test, 3, 300)
+
+# ─── Contraseñas ───────────────────────────────────────────────────
+variable h = auth.hash_contrasena("clave-segura-1")
+comprobar("hash: no es la contraseña", h != "clave-segura-1")
+comprobar("hash: verifica bien", auth.verificar_contrasena("clave-segura-1", h))
+comprobar("hash: falla con otra", auth.verificar_contrasena("otra", h) == falso)
+comprobar("hash: falla con hash vacío", auth.verificar_contrasena("clave-segura-1", "") == falso)
+
+comprobar_igual("problemas: contraseña corta", longitud(auth.problemas_de_contrasena("abc")), 2)
+comprobar_igual("problemas: sin dígito", longitud(auth.problemas_de_contrasena("solamenteletras")), 1)
+comprobar_igual("problemas: válida", longitud(auth.problemas_de_contrasena("clave1234")), 0)
+
+# ─── Registro ──────────────────────────────────────────────────────
+variable r1 = auth.registrar(guardia, "ana@ejemplo.com", "clave1234", crear_test)
+comprobar("registrar: ok", !auth.es_error(r1))
+comprobar_igual("registrar: devuelve id", auth.valor_de(r1), 1)
+comprobar("registrar: el usuario quedó guardado", usuarios["ana@ejemplo.com"] != nulo)
+
+variable r2 = auth.registrar(guardia, "ana@ejemplo.com", "otra-clave-1", crear_test)
+comprobar("registrar: duplicado falla", auth.es_error(r2))
+variable e2 = auth.error_de(r2)
+comprobar_texto("registrar: código duplicado", e2.codigo, "duplicado")
+
+variable r3 = auth.registrar(guardia, "bob@ejemplo.com", "corta", crear_test)
+comprobar("registrar: contraseña débil falla", auth.es_error(r3))
+comprobar_texto("registrar: código contraseña", auth.error_de(r3).codigo, "contrasena")
+
+variable r4 = auth.registrar(guardia, "", "clave1234", crear_test)
+comprobar("registrar: sin identificador falla", auth.es_error(r4))
+
+# ─── Login ─────────────────────────────────────────────────────────
+variable sol = nuevo SolicitudHTTP()
+sol.ip = "10.0.0.1"
+
+variable res = nuevo RespuestaHTTP()
+variable ok1 = auth.iniciar_sesion(guardia, sol, res, "ana@ejemplo.com", "clave1234")
+comprobar("login: ok", !auth.es_error(ok1))
+variable sesion1 = auth.valor_de(ok1)
+comprobar("login: sesión con id", sesion1 != nulo && longitud(sesion1.id) == 64)
+comprobar_igual("login: usuario en la sesión", sesion1.datos["usuario_id"], 1)
+comprobar("login: Set-Cookie", res.cabeceras["Set-Cookie"] != nulo)
+comprobar("login: cookie HttpOnly", contiene(res.cabeceras["Set-Cookie"], "HttpOnly"))
+
+# Contraseña incorrecta.
+variable res_mal = nuevo RespuestaHTTP()
+variable malo = auth.iniciar_sesion(guardia, sol, res_mal, "ana@ejemplo.com", "no-es-la-clave")
+comprobar("login: contraseña incorrecta", auth.es_error(malo))
+comprobar_texto("login: código credenciales", auth.error_de(malo).codigo, "credenciales")
+
+# Usuario inexistente: mismo código de error (no filtra existencia).
+variable res_inexistente = nuevo RespuestaHTTP()
+variable inexistente = auth.iniciar_sesion(guardia, sol, res_inexistente, "nadie@ejemplo.com", "clave1234")
+comprobar("login: usuario inexistente falla", auth.es_error(inexistente))
+comprobar_texto("login: mismo código que credenciales", auth.error_de(inexistente).codigo, "credenciales")
+
+# ─── Rate limit ────────────────────────────────────────────────────
+# El limitador es de 3 intentos por clave: ya se gastaron 3 (ok, mala, inexistente).
+variable res_limite = nuevo RespuestaHTTP()
+variable limitado = auth.iniciar_sesion(guardia, sol, res_limite, "ana@ejemplo.com", "clave1234")
+comprobar("rate limit: bloquea", auth.es_error(limitado))
+comprobar_texto("rate limit: código", auth.error_de(limitado).codigo, "demasiados_intentos")
+
+# Un usuario nuevo desde otra IP arranca con su propio contador.
+variable sol2 = nuevo SolicitudHTTP()
+sol2.ip = "10.0.0.2"
+variable res2 = nuevo RespuestaHTTP()
+auth.registrar(guardia, "carla@ejemplo.com", "clave1234", crear_test)
+variable ok2 = auth.iniciar_sesion(guardia, sol2, res2, "carla@ejemplo.com", "clave1234")
+comprobar("rate limit: usuario nuevo no está bloqueado", !auth.es_error(ok2))
+
+# ─── Sesión vigente y logout ───────────────────────────────────────
+# Con la cookie del login, la sesión se recupera.
+variable sol_cookie = nuevo SolicitudHTTP()
+sol_cookie.ip = "10.0.0.3"
+sol_cookie.cookies["sid"] = sesion.firmar(sesion1.id, almacen_sesiones.secreto)
+comprobar("sesion_actual: recupera", auth.sesion_actual(guardia, sol_cookie) != nulo)
+
+variable res_salir = nuevo RespuestaHTTP()
+auth.cerrar_sesion(guardia, sol_cookie, res_salir)
+comprobar("logout: borra la cookie", contiene(res_salir.cabeceras["Set-Cookie"], "Max-Age=0"))
+comprobar("logout: la sesión ya no vale", auth.sesion_actual(guardia, sol_cookie) == nulo)
+
+resumen()

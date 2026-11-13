@@ -1,0 +1,290 @@
+# modulo: vista
+# Descripcion: HTML seguro y accesible armado con funciones (SSR)
+#
+# Uso: importar "std/vista"
+#
+#   variable cuerpo = vista.contenedor([
+#       vista.titulo("Tareas", 1),
+#       vista.errores([mensaje_error]),
+#       vista.formulario("/tareas", "post", [
+#           vista.csrf(token),
+#           vista.campo("titulo", "", "text", "comprar pan", verdadero),
+#           vista.boton("Agregar")
+#       ]),
+#       vista.lista(filas, func(fila) {
+#           retornar vista.enlace("/tareas/" + a_texto(fila["id"]), fila["titulo"])
+#       })
+#   ])
+#   retornar servidor_web.html(respuesta, vista.pagina("Tareas", cuerpo, "/publico/estilo.css"))
+#
+# Todo valor pasa por escape de HTML: no hay forma de inyectar marcado desde
+# datos del usuario. Si ya tenés HTML confiable (otro render), usá
+# `vista.crudo(texto)` a propósito y con cuidado.
+
+importar "std/plantillas"
+importar "std/colecciones"
+
+# Etiquetas que no llevan cierre.
+constante VACIAS = "input,br,hr,img,meta,link"
+
+funcion _es_vacia(etiqueta: Texto) -> Logico {
+    variable lista = dividir(VACIAS, ",")
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        si (lista[i] == etiqueta) {
+            retornar verdadero
+        }
+        i = i + 1
+    }
+    retornar falso
+}
+
+# ─── Piezas básicas ─────────────────────────────────────────────────
+
+funcion escapar(texto: Texto) -> Texto {
+    retornar plantillas.escapar_html(texto)
+}
+
+# HTML que ya viene escapado (o generado por vos). No escapa nada.
+funcion crudo(html: Texto) -> Texto {
+    retornar html
+}
+
+# ` nombre="valor"` con el valor escapado. Con `valor` nulo no emite el atributo.
+funcion atributo(nombre: Texto, valor) -> Texto {
+    si (valor == nulo) {
+        retornar ""
+    }
+    retornar " " + nombre + "=\"" + escapar(a_texto(valor)) + "\""
+}
+
+# Atributos desde un mapa: `{"class": "x", "id": "y"}`.
+funcion atributos(mapa) -> Texto {
+    variable salida = ""
+    si (mapa == nulo) {
+        retornar salida
+    }
+    variable lista = claves(mapa)
+    variable i = 0
+    mientras (i < longitud(lista)) {
+        salida = salida + atributo(lista[i], mapa[lista[i]])
+        i = i + 1
+    }
+    retornar salida
+}
+
+# Elemento con hijos YA renderizados (HTML de confianza).
+funcion nodo(etiqueta: Texto, atributos_mapa, hijos_html: Texto) -> Texto {
+    variable apertura = "<" + etiqueta + atributos(atributos_mapa) + ">"
+    si (_es_vacia(etiqueta)) {
+        retornar apertura
+    }
+    variable contenido = ""
+    si (hijos_html != nulo) {
+        contenido = hijos_html
+    }
+    retornar apertura + contenido + "</" + etiqueta + ">"
+}
+
+# Elemento cuyo contenido es un texto que hay que escapar.
+funcion nodo_texto(etiqueta: Texto, atributos_mapa, texto: Texto) -> Texto {
+    retornar nodo(etiqueta, atributos_mapa, escapar(texto))
+}
+
+funcion texto_nodo(texto) -> Texto {
+    retornar escapar(a_texto(texto))
+}
+
+# ─── Estructura de página ───────────────────────────────────────────
+
+funcion encabezado(texto: Texto, nivel: Entero) -> Texto {
+    variable n = nivel
+    si (n < 1) {
+        n = 1
+    }
+    si (n > 6) {
+        n = 6
+    }
+    retornar "<h" + a_texto(n) + ">" + escapar(texto) + "</h" + a_texto(n) + ">"
+}
+
+funcion parrafo(texto: Texto) -> Texto {
+    retornar "<p>" + escapar(texto) + "</p>"
+}
+
+funcion enlace(url: Texto, etiqueta: Texto) -> Texto {
+    retornar "<a href=\"" + escapar(url) + "\">" + escapar(etiqueta) + "</a>"
+}
+
+# Envuelve hijos ya renderizados (los une sin separador).
+funcion contenedor(hijos_html) -> Texto {
+    variable contenido = ""
+    si (hijos_html != nulo) {
+        contenido = unir_elementos(hijos_html, "")
+    }
+    retornar nodo("div", {"class": "vista"}, contenido)
+}
+
+# Lista con ítems que se ESCAPAN (texto plano).
+funcion lista_textos(textos) -> Texto {
+    variable items = []
+    variable i = 0
+    mientras (i < longitud(textos)) {
+        items = items + ["<li>" + escapar(a_texto(textos[i])) + "</li>"]
+        i = i + 1
+    }
+    retornar "<ul>" + unir_elementos(items, "") + "</ul>"
+}
+
+# Lista con ítems que son HTML ya renderizado (de confianza).
+funcion lista_html(items_html) -> Texto {
+    variable items = []
+    variable i = 0
+    mientras (i < longitud(items_html)) {
+        items = items + ["<li>" + a_texto(items_html[i]) + "</li>"]
+        i = i + 1
+    }
+    retornar "<ul>" + unir_elementos(items, "") + "</ul>"
+}
+
+# Igual que `lista_html` pero cada ítem lleva una clase (`clases[i]`).
+funcion lista_html_con_clases(items_html, clases) -> Texto {
+    variable items = []
+    variable i = 0
+    mientras (i < longitud(items_html)) {
+        variable nombre_clase = ""
+        si (clases != nulo && i < longitud(clases)) {
+            nombre_clase = a_texto(clases[i])
+        }
+        items = items + ["<li class=\"" + escapar(nombre_clase) + "\">" + a_texto(items_html[i]) + "</li>"]
+        i = i + 1
+    }
+    retornar "<ul>" + unir_elementos(items, "") + "</ul>"
+}
+
+funcion _fila_html(celdas, etiqueta_celda: Texto) -> Texto {
+    variable partes = []
+    variable i = 0
+    mientras (i < longitud(celdas)) {
+        partes = partes + ["<" + etiqueta_celda + ">" + a_texto(celdas[i]) + "</" + etiqueta_celda + ">"]
+        i = i + 1
+    }
+    retornar unir_elementos(partes, "")
+}
+
+# Tabla con celdas HTML ya renderizado.
+funcion tabla_html(cabeceras_html, filas_html) -> Texto {
+    variable thead = ""
+    si (cabeceras_html != nulo && longitud(cabeceras_html) > 0) {
+        thead = "<thead><tr>" + _fila_html(cabeceras_html, "th") + "</tr></thead>"
+    }
+    variable cuerpo = []
+    variable f = 0
+    mientras (f < longitud(filas_html)) {
+        cuerpo = cuerpo + ["<tr>" + _fila_html(filas_html[f], "td") + "</tr>"]
+        f = f + 1
+    }
+    retornar "<table>" + thead + "<tbody>" + unir_elementos(cuerpo, "") + "</tbody></table>"
+}
+
+# Tabla con celdas de texto plano (se escapan).
+funcion tabla_textos(cabeceras, filas) -> Texto {
+    variable cabeceras_html = []
+    variable i = 0
+    mientras (i < longitud(cabeceras)) {
+        cabeceras_html = cabeceras_html + [escapar(a_texto(cabeceras[i]))]
+        i = i + 1
+    }
+    variable filas_html = []
+    variable f = 0
+    mientras (f < longitud(filas)) {
+        variable celdas = []
+        variable c = 0
+        mientras (c < longitud(filas[f])) {
+            celdas = celdas + [escapar(a_texto(filas[f][c]))]
+            c = c + 1
+        }
+        filas_html = filas_html + [celdas]
+        f = f + 1
+    }
+    retornar tabla_html(cabeceras_html, filas_html)
+}
+
+# ─── Formularios ────────────────────────────────────────────────────
+
+# Campo con `<label for>` (accesible) y `id`/`name` iguales.
+funcion campo(nombre: Texto, valor: Texto, tipo: Texto, marcador: Texto, requerido: Logico) -> Texto {
+    variable requerido_attr = ""
+    si (requerido) {
+        requerido_attr = " required"
+    }
+    variable etiqueta = "<label for=\"" + escapar(nombre) + "\">" + escapar(nombre) + "</label>"
+    variable entrada = "<input type=\"" + escapar(tipo) + "\"" +
+        " id=\"" + escapar(nombre) + "\"" +
+        " name=\"" + escapar(nombre) + "\"" +
+        " value=\"" + escapar(valor) + "\"" +
+        " placeholder=\"" + escapar(marcador) + "\"" +
+        requerido_attr + ">"
+    retornar etiqueta + entrada
+}
+
+# Campo oculto con el token CSRF.
+funcion csrf(token: Texto) -> Texto {
+    retornar "<input type=\"hidden\" name=\"csrf\" value=\"" + escapar(token) + "\">"
+}
+
+funcion boton(etiqueta: Texto, tipo: Texto) -> Texto {
+    variable tipo_boton = tipo
+    si (tipo_boton == nulo || tipo_boton == "") {
+        tipo_boton = "submit"
+    }
+    retornar "<button type=\"" + escapar(tipo_boton) + "\">" + escapar(etiqueta) + "</button>"
+}
+
+# `formulario("/tareas", "post", [...])`
+funcion formulario(accion: Texto, metodo: Texto, hijos_html) -> Texto {
+    variable metodo_form = metodo
+    si (metodo_form == nulo || metodo_form == "") {
+        metodo_form = "post"
+    }
+    variable contenido = ""
+    si (hijos_html != nulo) {
+        contenido = unir_elementos(hijos_html, "")
+    }
+    retornar "<form method=\"" + escapar(metodo_form) + "\" action=\"" + escapar(accion) + "\">" +
+        contenido + "</form>"
+}
+
+# ─── Mensajes ───────────────────────────────────────────────────────
+
+funcion errores(mensajes) -> Texto {
+    variable partes = []
+    variable i = 0
+    mientras (i < longitud(mensajes)) {
+        variable mensaje = mensajes[i]
+        si (mensaje != nulo && a_texto(mensaje) != "") {
+            partes = partes + ["<p class=\"error\">" + escapar(a_texto(mensaje)) + "</p>"]
+        }
+        i = i + 1
+    }
+    retornar unir_elementos(partes, "")
+}
+
+funcion aviso(texto: Texto) -> Texto {
+    retornar "<p class=\"aviso\">" + escapar(texto) + "</p>"
+}
+
+# ─── Página completa ────────────────────────────────────────────────
+
+# Documento HTML5 con `lang`, viewport y una hoja de estilos opcional.
+# `contenido` es HTML ya renderizado (por ejemplo con `contenedor`).
+funcion pagina(titulo_pagina: Texto, contenido: Texto, hoja_estilos: Texto) -> Texto {
+    variable estilos = ""
+    si (hoja_estilos != nulo && hoja_estilos != "") {
+        estilos = "<link rel=\"stylesheet\" href=\"" + escapar(hoja_estilos) + "\">"
+    }
+    retornar "<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\">" +
+        "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">" +
+        "<title>" + escapar(titulo_pagina) + "</title>" + estilos +
+        "</head><body>" + contenido + "</body></html>"
+}

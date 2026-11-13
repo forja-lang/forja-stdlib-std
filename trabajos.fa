@@ -1,0 +1,133 @@
+# modulo: trabajos
+# Descripcion: Cola de trabajos en segundo plano sobre Redis (listas + reintentos)
+#
+# Uso: importar "std/trabajos"
+#
+#   variable r = redis.conectar("127.0.0.1", 6379)
+#   variable cola = trabajos.cola(r, "correos", 3)
+#
+#   trabajos.encolar(cola, {"tipo": "bienvenida", "para": "ana@ejemplo.com"})
+#
+#   # worker (otro proceso):
+#   trabajos.procesar(cola, manejador, 100)
+#
+#   funcion manejador(trabajo) {
+#       si (trabajo["tipo"] == "bienvenida") { enviar_correo(trabajo["para"]) }
+#       retornar nulo            # nulo/verdadero = hecho
+#       # retornar "SMTP caído" # un texto = falló, se reintenta
+#   }
+#
+# Claves en Redis:
+#   trabajos:<nombre>            lista de pendientes (RPOP = FIFO con LPUSH)
+#   trabajos:<nombre>:fallidos   lista de agotados (dead letter)
+#
+# Los trabajos viajan como JSON; el intento actual y el último error quedan
+# dentro del propio trabajo (`intentos`, `ultimo_error`) para no necesitar otra
+# estructura ni transacciones.
+#
+# Lo que NO hay todavía: retraso entre reintentos (backoff) ni
+# `BRPOP` bloqueante: `procesar` saca hasta vaciar y vuelve.
+
+importar "std/redis"
+importar "std/json"
+importar "std/resultado"
+
+clase Cola {
+    redis
+    nombre
+    max_intentos
+
+    constructor(cliente_redis, nombre: Texto, max_intentos: Entero) {
+        este.redis = cliente_redis
+        este.nombre = nombre
+        este.max_intentos = max_intentos
+    }
+}
+
+funcion cola(cliente_redis, nombre: Texto, max_intentos: Entero) {
+    retornar nuevo Cola(cliente_redis, nombre, max_intentos)
+}
+
+funcion _clave_pendientes(c) -> Texto {
+    retornar "trabajos:" + c.nombre
+}
+
+funcion _clave_fallidos(c) -> Texto {
+    retornar "trabajos:" + c.nombre + ":fallidos"
+}
+
+# Encola un trabajo (mapa). Devuelve falso si no se pudo serializar.
+funcion encolar(c, trabajo) -> Logico {
+    variable texto = resultado.desenvolver(json.serializar(trabajo))
+    si (texto == nulo) {
+        retornar falso
+    }
+    retornar redis.lista_empujar(c.redis, _clave_pendientes(c), a_texto(texto)) > 0
+}
+
+# Saca el trabajo más viejo (LPUSH + RPOP = FIFO). Nulo si la cola está vacía.
+funcion sacar(c) {
+    variable crudo = redis.lista_sacar(c.redis, _clave_pendientes(c))
+    si (crudo == nulo || crudo == "") {
+        retornar nulo
+    }
+    variable trabajo = resultado.desenvolver(json.parsear(a_texto(crudo)))
+    si (trabajo == nulo) {
+        # JSON roto: no se puede reintentar, va a fallidos tal cual.
+        redis.lista_empujar(c.redis, _clave_fallidos(c), "json_invalido: " + a_texto(crudo))
+        retornar nulo
+    }
+    retornar trabajo
+}
+
+funcion pendientes(c) -> Entero {
+    retornar redis.lista_largo(c.redis, _clave_pendientes(c))
+}
+
+funcion fallidos(c) -> Entero {
+    retornar redis.lista_largo(c.redis, _clave_fallidos(c))
+}
+
+# Devuelve el trabajo a la cola con el intento incrementado. `max_intentos`
+# cuenta REINTENTOS: con 2, el trabajo se reintenta dos veces y al tercer fallo
+# va a la lista de fallidos.
+funcion reintentar(c, mut trabajo, motivo: Texto) -> Logico {
+    variable intentos = 1
+    variable previos = trabajo["intentos"]
+    si (previos != nulo) {
+        intentos = previos + 1
+    }
+    trabajo["intentos"] = intentos
+    trabajo["ultimo_error"] = a_texto(motivo)
+
+    si (intentos > c.max_intentos) {
+        variable texto = resultado.desenvolver(json.serializar(trabajo))
+        si (texto == nulo) {
+            retornar falso
+        }
+        retornar redis.lista_empujar(c.redis, _clave_fallidos(c), a_texto(texto)) > 0
+    }
+    retornar encolar(c, trabajo)
+}
+
+# Procesa hasta `maximo` trabajos (o hasta vaciar). Devuelve cuántos sacó.
+#
+# `manejador(trabajo)`:
+#   nulo o verdadero → hecho
+#   cualquier otra cosa → se reintenta, usando el valor como motivo
+funcion procesar(c, manejador, maximo: Entero) -> Entero {
+    variable procesados = 0
+    mientras (procesados < maximo) {
+        variable trabajo = sacar(c)
+        si (trabajo == nulo) {
+            romper
+        }
+        variable resultado_trabajo = manejador(trabajo)
+        variable hecho = resultado_trabajo == nulo || resultado_trabajo == verdadero
+        si (!hecho) {
+            reintentar(c, trabajo, a_texto(resultado_trabajo))
+        }
+        procesados = procesados + 1
+    }
+    retornar procesados
+}

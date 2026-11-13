@@ -1,0 +1,110 @@
+# Tests de std/sesion: cookie firmada, expiración, rotación y CSRF.
+importar "std/sesion"
+importar "std/servidor_web"
+importar "std/tests/arnes"
+
+# Ayuda local: ¿todo el texto son dígitos hexadecimales en minúscula?
+funcion _solo_hex(texto: Texto) -> Logico {
+    variable permitidos = "0123456789abcdef"
+    variable i = 0
+    mientras (i < longitud(texto)) {
+        si (!contiene(permitidos, subcadena(texto, i, 1))) {
+            retornar falso
+        }
+        i = i + 1
+    }
+    retornar longitud(texto) > 0
+}
+
+constante SECRETO = "secreto-de-pruebas-para-hmac-123456" 
+
+# ─── Firma de cookies ──────────────────────────────────────────────
+variable cookie = sesion.firmar("abc123", SECRETO)
+comprobar("firmar: incluye el id", empieza_con(cookie, "abc123."))
+comprobar_texto("verificar: devuelve el id", sesion.verificar(cookie, SECRETO), "abc123")
+comprobar("verificar: otra clave falla", sesion.verificar(cookie, "otro-secreto") == nulo)
+comprobar("verificar: id alterado falla", sesion.verificar("xyz." + subcadena(cookie, 7, 64), SECRETO) == nulo)
+comprobar("verificar: sin firma falla", sesion.verificar("abc123", SECRETO) == nulo)
+comprobar("verificar: firma truncada falla", sesion.verificar(subcadena(cookie, 0, 20), SECRETO) == nulo)
+comprobar("verificar: vacío falla", sesion.verificar("", SECRETO) == nulo)
+
+# ─── CRUD ──────────────────────────────────────────────────────────
+variable a = sesion.almacen(SECRETO, 3600, falso)
+variable s = sesion.crear(a, {"usuario": 7})
+comprobar("crear: id no vacío", longitud(s.id) == 64)
+comprobar("crear: datos guardados", s.datos["usuario"] == 7)
+comprobar_igual("cantidad: 1", sesion.cantidad(a), 1)
+
+variable recuperada = sesion.buscar(a, s.id)
+comprobar("obtener: misma sesión", recuperada != nulo && recuperada.id == s.id)
+comprobar("obtener: id inexistente", sesion.buscar(a, "no-existe") == nulo)
+
+variable rotada = sesion.rotar(a, s)
+comprobar("rotar: cambia el id", rotada.id != s.id)
+comprobar("rotar: conserva datos", rotada.datos["usuario"] == 7)
+comprobar("rotar: el id viejo ya no sirve", sesion.buscar(a, s.id) == nulo)
+comprobar("rotar: el nuevo sí", sesion.buscar(a, rotada.id) != nulo)
+
+sesion.invalidar(a, rotada.id)
+comprobar("cerrar: la sesión ya no está", sesion.buscar(a, rotada.id) == nulo)
+
+# Expiración: duración 0 → vence de inmediato.
+variable a0 = sesion.almacen(SECRETO, 0, falso)
+variable s0 = sesion.crear(a0, {})
+comprobar("expiración: no se puede obtener", sesion.buscar(a0, s0.id) == nulo)
+
+# Limpieza de expiradas.
+variable a1 = sesion.almacen(SECRETO, 3600, falso)
+sesion.crear(a1, {})
+comprobar_igual("limpiar: nada que borrar", sesion.limpiar_expiradas(a1), 0)
+
+# ─── Integración con solicitud/respuesta ───────────────────────────
+variable sol = nuevo SolicitudHTTP()
+sol.cookies["sid"] = sesion.firmar(s.id, SECRETO)
+variable s2 = sesion.crear(a, {"rol": "admin"})
+sol.cookies["sid"] = sesion.firmar(s2.id, SECRETO)
+variable leida = sesion.leer_de_solicitud(a, sol)
+comprobar("leer_de_solicitud: encuentra la sesión", leida != nulo && leida.id == s2.id)
+
+sol.cookies["sid"] = "basura.sin-firma"
+comprobar("leer_de_solicitud: cookie inválida", sesion.leer_de_solicitud(a, sol) == nulo)
+
+variable sol_sin = nuevo SolicitudHTTP()
+comprobar("leer_de_solicitud: sin cookie", sesion.leer_de_solicitud(a, sol_sin) == nulo)
+
+variable res = nuevo RespuestaHTTP()
+sesion.fijar_cookie(res, a, s2)
+variable cookie_res = res.cabeceras["Set-Cookie"]
+comprobar("cookie: HttpOnly", contiene(cookie_res, "HttpOnly"))
+comprobar("cookie: SameSite", contiene(cookie_res, "SameSite=Lax"))
+comprobar("cookie: Path", contiene(cookie_res, "Path=/"))
+comprobar("cookie: Max-Age", contiene(cookie_res, "Max-Age=3600"))
+comprobar("cookie: sin Secure por defecto", contiene(cookie_res, "Secure") == falso)
+
+variable a_seguro = sesion.almacen(SECRETO, 60, verdadero)
+variable res_seguro = nuevo RespuestaHTTP()
+sesion.fijar_cookie(res_seguro, a_seguro, s2)
+comprobar("cookie: Secure con almacén seguro", contiene(res_seguro.cabeceras["Set-Cookie"], "Secure"))
+
+variable res_borrar = nuevo RespuestaHTTP()
+sesion.borrar_cookie(res_borrar)
+comprobar("borrar cookie: Max-Age=0", contiene(res_borrar.cabeceras["Set-Cookie"], "Max-Age=0"))
+
+# ─── CSRF ──────────────────────────────────────────────────────────
+variable token = sesion.token_csrf(a, s2)
+comprobar_igual("csrf: token de 64 hex", longitud(token), 64)
+comprobar("csrf: token válido", sesion.csrf_valido(a, s2, token))
+comprobar("csrf: token ajeno", sesion.csrf_valido(a, s2, "0" + subcadena(token, 1, 63)) == falso)
+comprobar("csrf: token vacío", sesion.csrf_valido(a, s2, "") == falso)
+comprobar("csrf: sin sesión", sesion.csrf_valido(a, nulo, token) == falso)
+
+variable otra = sesion.crear(a, {})
+comprobar("csrf: token de otra sesión no sirve", sesion.csrf_valido(a, otra, token) == falso)
+
+# ─── Aleatoriedad (N25: los ids deben ser ASCII, no bytes corruptos) ─
+variable id1 = _random_bytes(32)
+comprobar_igual("_random_bytes: 64 hex", longitud(id1), 64)
+comprobar("_random_bytes: sólo hex", _solo_hex(id1))
+comprobar("_random_bytes: dos ids distintos", _random_bytes(32) != id1)
+
+resumen()

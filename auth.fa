@@ -1,0 +1,196 @@
+# modulo: auth
+# Descripcion: Registro y login con contrasenas hasheadas, sesión y rate limit
+#
+# Uso: importar "std/auth"
+#
+#   funcion buscar(identificador) {
+#       variable fila = datos.consultar_una(db, "SELECT id, hash FROM usuarios WHERE email = ?", [identificador])?
+#       si (fila == nulo) { retornar nulo }
+#       retornar {"id": fila["id"], "hash": fila["hash"]}
+#   }
+#
+#   variable guardia = auth.autenticador(almacen_sesiones, buscar, 5, 300)
+#
+#   variable resultado = auth.iniciar_sesion(guardia, solicitud, respuesta, email, clave)
+#   si (auth.es_error(resultado)) {
+#       variable error = auth.error_de(resultado)
+#       # error.codigo: "credenciales" | "demasiados_intentos"
+#   }
+#
+# La persistencia queda afuera a propósito: `buscar` y `crear` son funciones
+# que el programa aporta (SQLite, Redis o un mapa en memoria para pruebas).
+
+importar "std/crypto"
+importar "std/limitador"
+importar "std/sesion"
+importar "std/colecciones"
+importar "std/resultado"
+
+# Hash de relleno: se verifica igual cuando el usuario no existe, para que el
+# tiempo de respuesta no delate si el identificador está registrado.
+constante HASH_RELLENO = "$pbkdf2-sha256$600000$7bd5e88feae68777c1614c8650bd24b1$16bc836b82d15de35957e5276f1677db3df41980835f6cbc34be696f2b52a09e"
+
+constante MINIMO_CONTRASENA = 8
+
+# ─── Errores ────────────────────────────────────────────────────────
+clase ErrorAuth {
+    codigo
+    mensaje
+
+    constructor(codigo: Texto, mensaje: Texto) {
+        este.codigo = codigo
+        este.mensaje = mensaje
+    }
+}
+
+# ─── Autenticador ───────────────────────────────────────────────────
+clase Autenticador {
+    almacen_sesiones
+    buscar_usuario
+    limite
+
+    constructor(almacen_sesiones, buscar_usuario, limite) {
+        este.almacen_sesiones = almacen_sesiones
+        este.buscar_usuario = buscar_usuario
+        este.limite = limite
+    }
+}
+
+# `maximo_intentos` por `ventana_segundos`, por identificador y por IP.
+funcion autenticador(almacen_sesiones, buscar_usuario, maximo_intentos: Entero, ventana_segundos: Entero) {
+    retornar nuevo Autenticador(almacen_sesiones, buscar_usuario, limitador.limitador(maximo_intentos, ventana_segundos))
+}
+
+# ─── Contrasenas ────────────────────────────────────────────────────
+
+funcion hash_contrasena(contrasena: Texto) {
+    retornar _hash_password(contrasena)
+}
+
+funcion verificar_contrasena(contrasena: Texto, hash: Texto) -> Logico {
+    si (hash == nulo || hash == "") {
+        retornar falso
+    }
+    retornar _verify_password(contrasena, hash)
+}
+
+# Devuelve una lista de problemas (vacía si la contrasena sirve).
+funcion problemas_de_contrasena(contrasena: Texto) {
+    variable problemas = []
+    si (longitud(contrasena) < MINIMO_CONTRASENA) {
+        problemas = problemas + ["debe tener al menos " + a_texto(MINIMO_CONTRASENA) + " caracteres"]
+    }
+    variable i = 0
+    variable tiene_digito = falso
+    mientras (i < longitud(contrasena)) {
+        variable c = subcadena(contrasena, i, 1)
+        si (contiene("0123456789", c)) {
+            tiene_digito = verdadero
+        }
+        i = i + 1
+    }
+    si (!tiene_digito) {
+        problemas = problemas + ["debe incluir al menos un número"]
+    }
+    retornar problemas
+}
+
+# ─── Registro ───────────────────────────────────────────────────────
+
+# `crear_usuario(identificador, hash)` debe devolver el id del usuario nuevo, o
+# nulo si ya existía / falló.
+funcion registrar(guardia, identificador: Texto, contrasena: Texto, crear_usuario) {
+    si (identificador == nulo || recortar(identificador) == "") {
+        retornar Error(nuevo ErrorAuth("identificador", "El identificador es obligatorio"))
+    }
+    variable problemas = problemas_de_contrasena(contrasena)
+    si (longitud(problemas) > 0) {
+        retornar Error(nuevo ErrorAuth("contrasena", unir_elementos(problemas, "; ")))
+    }
+    # `objeto.campo(args)` sobre un campo que guarda una función devuelve nulo
+    # (N27): hay que pasar la función por una variable antes de llamarla.
+    variable buscar = guardia.buscar_usuario
+    si (buscar(identificador) != nulo) {
+        retornar Error(nuevo ErrorAuth("duplicado", "Ese identificador ya está registrado"))
+    }
+    variable crear = crear_usuario
+    variable id = crear(identificador, hash_contrasena(contrasena))
+    si (id == nulo) {
+        retornar Error(nuevo ErrorAuth("duplicado", "No se pudo crear el usuario"))
+    }
+    retornar Ok(id)
+}
+
+# ─── Login / logout ─────────────────────────────────────────────────
+
+funcion iniciar_sesion(guardia, solicitud, respuesta, identificador: Texto, contrasena: Texto) {
+    variable clave_usuario = "login:u:" + a_texto(identificador)
+    variable clave_ip = "login:ip:" + a_texto(solicitud.ip)
+
+    si (!limitador.permitir(guardia.limite, clave_usuario)) {
+        retornar Error(nuevo ErrorAuth("demasiados_intentos", "Demasiados intentos; esperá unos minutos"))
+    }
+    si (!limitador.permitir(guardia.limite, clave_ip)) {
+        retornar Error(nuevo ErrorAuth("demasiados_intentos", "Demasiados intentos; esperá unos minutos"))
+    }
+
+    variable buscar = guardia.buscar_usuario
+    variable usuario = buscar(identificador)
+    # El local NO se llama `hash`: `hash` es el módulo std/hash y la variable
+    # perdería contra él al pasarla como argumento (N4).
+    variable hash_guardado = HASH_RELLENO
+    si (usuario != nulo) {
+        hash_guardado = usuario["hash"]
+    }
+    # Se verifica siempre, exista o no el usuario (tiempo comparable).
+    variable valida = verificar_contrasena(contrasena, hash_guardado)
+
+    si (usuario == nulo || !valida) {
+        retornar Error(nuevo ErrorAuth("credenciales", "Identificador o contrasena incorrectos"))
+    }
+
+    variable previa = sesion.leer_de_solicitud(guardia.almacen_sesiones, solicitud)
+    variable nueva = sesion.crear(guardia.almacen_sesiones, {"usuario_id": usuario["id"]})
+    si (previa != nulo) {
+        sesion.invalidar(guardia.almacen_sesiones, previa.id)
+    }
+
+    sesion.fijar_cookie(respuesta, guardia.almacen_sesiones, nueva)
+    limitador.reiniciar(guardia.limite, clave_usuario)
+    retornar Ok(nueva)
+}
+
+funcion cerrar_sesion(guardia, solicitud, respuesta) {
+    variable actual = sesion.leer_de_solicitud(guardia.almacen_sesiones, solicitud)
+    si (actual != nulo) {
+        sesion.invalidar(guardia.almacen_sesiones, actual.id)
+    }
+    sesion.borrar_cookie(respuesta)
+    retornar nulo
+}
+
+# Sesión vigente o nulo. Para guardias de rutas:
+#   si (auth.sesion_actual(guardia, solicitud) == nulo) { ... 403 ... }
+funcion sesion_actual(guardia, solicitud) {
+    retornar sesion.leer_de_solicitud(guardia.almacen_sesiones, solicitud)
+}
+
+# ─── Resultado ──────────────────────────────────────────────────────
+
+funcion es_error(valor) -> Logico {
+    retornar resultado.es_error(valor)
+}
+
+funcion error_de(valor) {
+    coincidir (valor) {
+        caso Error(e) -> { retornar e }
+        caso _ -> { retornar nulo }
+    }
+}
+
+funcion valor_de(valor) {
+    coincidir (valor) {
+        caso Ok(v) -> { retornar v }
+        caso _ -> { retornar nulo }
+    }
+}
