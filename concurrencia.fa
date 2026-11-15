@@ -157,21 +157,27 @@ funcion reintentar(max_intentos: Entero, callback) {
 # Retorna un arreglo con los resultados (orden original).
 #
 funcion mapa_async(arr: Arreglo, callback: Funcion) -> Arreglo {
-    # Los `hilo` de Forja clonan la VM y el montículo: un callback (closure)
-    # dentro de un hilo no ve el entorno del que lo creó y devuelve nulo.
-    # shortcut: secuencial hasta que exista estado compartido entre hilos
-    # (ver N11 en plans/PLAN_WEB_Y_GUI.md); cuando exista, volver a paralelizar.
     variable n = longitud(arr)
     variable resultados = []
+    variable futures = []
     variable k = 0
     mientras (k < n) {
         resultados[k] = nulo
         k = k + 1
     }
+    # Un hilo por elemento: cada hilo captura `callback` y su valor.
     variable i = 0
     mientras (i < n) {
-        resultados[i] = callback(arr[i])
+        variable valor = arr[i]
+        futures[i] = hilo {
+            retornar callback(valor)
+        }
         i = i + 1
+    }
+    variable j = 0
+    mientras (j < n) {
+        resultados[j] = futures[j].unir()
+        j = j + 1
     }
     retornar resultados
 }
@@ -184,11 +190,9 @@ funcion mapa_async(arr: Arreglo, callback: Funcion) -> Arreglo {
 # usando hilos reales. Retorna arreglo con resultados.
 #
 funcion paralelo_for_async(inicio: Entero, fin: Entero, callback: Funcion) -> Arreglo {
-    # Misma limitación que `mapa_async`: los hilos no comparten el entorno de
-    # los closures, así que por ahora se ejecuta en orden.
-    # shortcut: secuencial hasta que haya estado compartido entre hilos (N11).
     variable n = fin - inicio
     variable resultados = []
+    variable futures = []
     variable k = 0
     mientras (k < n) {
         resultados[k] = nulo
@@ -196,8 +200,16 @@ funcion paralelo_for_async(inicio: Entero, fin: Entero, callback: Funcion) -> Ar
     }
     variable i = inicio
     mientras (i < fin) {
-        resultados[i - inicio] = callback(i)
+        variable idx = i
+        futures[i - inicio] = hilo {
+            retornar callback(idx)
+        }
         i = i + 1
+    }
+    variable j = 0
+    mientras (j < n) {
+        resultados[j] = futures[j].unir()
+        j = j + 1
     }
     retornar resultados
 }

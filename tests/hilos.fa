@@ -1,0 +1,39 @@
+# Tests de hilos: captura de variables y closures (antes devolvían nulo).
+importar "std/concurrencia"
+importar "std/tests/arnes"
+
+# ─── Capturas básicas ────────────────────────────────────────────
+variable x = 5
+variable arr = [7, 8]
+variable txt = "hola"
+variable h1 = hilo { retornar x * 2 }
+comprobar_igual("captura de entero", h1.unir(), 10)
+variable h2 = hilo { retornar arr[0] }
+comprobar_igual("captura de arreglo", h2.unir(), 7)
+variable h3 = hilo { retornar longitud(txt) }
+comprobar_igual("captura de texto", h3.unir(), 4)
+
+# ─── Closure capturado y llamado dentro del hilo ─────────────────
+variable doble = func(y) { retornar y * 2 }
+variable h4 = hilo { retornar doble(21) }
+comprobar_igual("closure capturado", h4.unir(), 42)
+
+variable h5 = hilo {
+    variable local = func(y) { retornar y + 1 }
+    retornar local(41)
+}
+comprobar_igual("closure creado dentro del hilo", h5.unir(), 42)
+
+# ─── Closures como parámetro de funciones con hilos ──────────────
+funcion triplicar(y) { retornar y * 3 }
+variable resultados = mapa_async([1, 2, 3], triplicar)
+comprobar_igual("mapa_async con función de primer nivel", resultados, [3, 6, 9])
+
+variable sumar_cien = func(y) { retornar y + 100 }
+variable resultados2 = mapa_async([1, 2], sumar_cien)
+comprobar_igual("mapa_async con closure", resultados2, [101, 102])
+
+variable pares = paralelo_for_async(0, 4, func(i) { retornar i * i })
+comprobar_igual("paralelo_for_async", pares, [0, 1, 4, 9])
+
+resumen()
